@@ -1,6 +1,5 @@
 import math
 import random
-from xml.etree.ElementTree import TreeBuilder
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -80,10 +79,7 @@ class RRT:
             self.tree_building(self.start,self.node_list2,animation)
 
             self.tree_building(self.end,self.node_list,animation)      
-                    
-
-
-            
+        
             #def nodecost(self,n)
 
     def tree_building(self, goal, node_tree, animation):
