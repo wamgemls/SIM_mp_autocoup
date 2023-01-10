@@ -1,11 +1,12 @@
 import math
+import numpy as np
+import time
+
+while True:
+    rnd_num = np.random.normal(0,0.1)
+    print(rnd_num)
+
+    time.sleep(0.5)
 
 
-list = [1,2,3,4,5]
 
-myit=iter(list)
-
-
-print(next(myit))
-next(myit)
-print(next(myit))
