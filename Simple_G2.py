@@ -113,9 +113,13 @@ class G2ClothoidPlanner:
             x,y = self.find_intersection(self.trajectory[i-1].x,self.trajectory[i].x,self.trajectory[i-1].y,self.trajectory[i].y,\
                                             projection_x1,projection_x2,projection_y1,projection_y2)
 
-            if self.trajectory[i-1].x > x >= self.trajectory[i].x or self.trajectory[i-1].x <= x < self.trajectory[i].x and\
-                self.trajectory[i-1].y > y >= self.trajectory[i].y or self.trajectory[i-1].y <= y < self.trajectory[i].y:
+            x = round(x,4)
+            y = round(y,4)
+            print(i, "intersection found")
 
+            if (self.trajectory[i-1].x <= x < self.trajectory[i].x or self.trajectory[i-1].x >= x > self.trajectory[i].x) and\
+                (self.trajectory[i-1].y <= y < self.trajectory[i].y or self.trajectory[i-1].y >= y > self.trajectory[i].y):
+                print("correct intersection")
                 return Pose(x,y)
             
             i += 1
@@ -254,7 +258,7 @@ class PlannerMachine(StateMachine):
         if d <= 0.1 and theta <= 0.1:
             print('!goal reached!')
             self.goalreached_check_success()
-
+        
         else:
             print('!goal not reached!')
             self.goalreached_check_fail()
@@ -282,11 +286,18 @@ class PlannerMachine(StateMachine):
             dis_ego_traj, theta_ego_traj = self.planner.distance_angle_PoseA_to_PoseB(point_on_trajectory,self.planner.ego_pose)
 
             #---TransitionCondition---#
-            if dis_goal_trajgoal <= 1 and theta_goal_trajgoal <= np.deg2rad(10):
-                if dis_ego_traj <= 1 and theta_ego_traj <= np.deg2rad(10):
+            if dis_goal_trajgoal <= 1:# and theta_goal_trajgoal <= np.deg2rad(10):
+                if dis_ego_traj <= 3:# and theta_ego_traj <= np.deg2rad(10):
 
                     self.bilevel_check_success()
+                else:
+                    print("ego Pose not on trajectory")
+                    #self.bilevel_check_fail()
+            else:   
+                print("goal not on trajectory")
+                #self.bilevel_check_fail()
         else:
+            print("not found trajectory")
             self.bilevel_check_fail()
 
     def on_enter_feasibility_check(self):
@@ -431,7 +442,8 @@ class Simulation:
         while i < len(self.plannermachine.planner.trajectory):
 
             if self.plannermachine.planner.trajectory[i-1].length < self.ego_on_trajectorylength < self.plannermachine.planner.trajectory[i].length:
-
+                
+                """
                 x = self.plannermachine.planner.calc_lin_interpol(self.plannermachine.planner.trajectory[i-1].length,self.plannermachine.planner.trajectory[i-1].x,\
                                                 self.plannermachine.planner.trajectory[i].length,self.plannermachine.planner.trajectory[i].x,self.ego_on_trajectorylength)
 
@@ -440,10 +452,12 @@ class Simulation:
                 
                 yaw = self.plannermachine.planner.calc_lin_interpol(self.plannermachine.planner.trajectory[i-1].length,self.plannermachine.planner.trajectory[i-1].yaw,\
                                                 self.plannermachine.planner.trajectory[i].length,self.plannermachine.planner.trajectory[i].yaw,self.ego_on_trajectorylength)
-                
-                self.ego.x = x + np.random.normal(0,0.1)
-                self.ego.y = y + np.random.normal(0,0.1)
+                """
+
+                self.ego.x -= x + np.random.normal(0,0.1)
+                self.ego.y -= y + np.random.normal(0,0.1)
                 self.ego.yaw = yaw
+
 
                 break
             
@@ -463,10 +477,12 @@ class Simulation:
             self.plannermachine.planner.update_goal_pose(self.goal_pose)
 
             self.plannermachine.initialization()
-
+            
             self.ego_drive_step()
 
-            time.sleep(0.5)
+            self.visualization()
+
+            time.sleep(1)
         
 
         
@@ -476,41 +492,19 @@ class Simulation:
         # for stopping simulation with the esc key.
         plt.gcf().canvas.mpl_connect('key_release_event',lambda event: [exit(0) if event.key == 'escape' else None])
 
-        if self.init_trajectory is not None:
+        if self.plannermachine.planner.trajectory is not None:
             
             x = []
             y = []
 
-            for trajectory_point in self.init_trajectory:   
-                x += [trajectory_point.x]
-                y += [trajectory_point.y]
-            
-            plt.plot(x,y, "-b")
-
-        if self.driven_trajectory is not None:
-            
-            x = []
-            y = []
-
-            for trajectory_point in self.driven_trajectory:   
-                x += [trajectory_point.x]
-                y += [trajectory_point.y]
-
-            plt.plot(x,y, "-r")
-
-        if self.planner.trajectory is not None:
-            
-            x = []
-            y = []
-
-            for trajectory_point in self.planner.trajectory:   
+            for trajectory_point in self.plannermachine.planner.trajectory:   
                 x += [trajectory_point.x]
                 y += [trajectory_point.y]
             
             plt.plot(x,y, "-g")
 
-        if self.ego.pose is not None:
-            self.plot_arrow(self.ego.pose.x,self.ego.pose.y, self.ego.pose.yaw)
+        if self.ego is not None:
+            self.plot_arrow(self.ego.x,self.ego.y, self.ego.yaw)
 
         if self.init_pose is not None:
             self.plot_arrow(self.init_pose.x,self.init_pose.y,self.init_pose.yaw,0.75,0.75,"r")
@@ -532,7 +526,7 @@ class Simulation:
         plt.axis("equal")
         plt.pause(0.01)
 
-        self.LinePlot()
+        #self.LinePlot()
 
     def LinePlot(self):
 
