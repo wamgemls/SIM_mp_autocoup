@@ -1,5 +1,6 @@
 import time
 import matplotlib.pyplot as plt
+from matplotlib import animation
 import numpy as np
 from G2ClothoidPlanner import G2ClothoidPlanner, Pose, TrajectoryPoint
 
@@ -31,6 +32,8 @@ class Simulation:
     def simulate(self):
     
         counter = 0
+
+        self.animation()
         
         while True:
 
@@ -49,6 +52,33 @@ class Simulation:
             self.planner.ego_drive_step()
 
             time.sleep(0.5)
+    
+
+    def animation(self):
+
+        # First set up the figure, the axis, and the plot element we want to animate
+        fig = plt.figure()
+        ax = plt.axes(xlim=(0, 2), ylim=(-2, 2))
+        line, = ax.plot([], [], lw=2)
+
+        # initialization function: plot the background of each frame
+        def init():
+            line.set_data([], [])
+            return line,
+
+        # animation function.  This is called sequentially
+        def animate(i):
+            x = np.linspace(0, 2, 1000)
+            y = np.sin(2 * np.pi * (x - 0.01 * i))
+            line.set_data(x, y)
+            return line,
+
+        # call the animator.  blit=True means only re-draw the parts that have changed.
+        anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                    frames=200, interval=20, blit=True)
+
+        plt.show(block)
+
         
     def visualization(self, rnd = None):
 

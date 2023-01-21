@@ -1,20 +1,21 @@
+import matplotlib.pyplot as plt
 import time
-import numpy as np
-from matplotlib import pyplot as plt
 
-def main():
-    plt.axis([-50,50,0,10000])
-    plt.ion()
-    plt.show()
+def ShowGraph():
+    n = 2
+    j = 1
+    while j <= 10:
+        x = [i for i in range(n)]
+        y = [i for i in range(n)]
+        plt.plot(x, y, 'r-')
+        plt.ylim([0, 10])
+        plt.xlim([0, 10])
+        if j > 1:
+            plt.draw()
+        else:
+            plt.show(block=False)
+        time.sleep(1)
+        n += 1
+        j += 1
 
-    x = np.arange(-50, 51)
-    for pow in range(1,30):   # plot x^1, x^2, ..., x^4
-        y = [Xi**pow for Xi in x]
-        plt.plot(x, y)
-        plt.draw()
-        plt.pause(0.001)
-        time.sleep(2)
-        #input("Press [enter] to continue.")
-
-if __name__ == '__main__':
-    main()
+ShowGraph()
