@@ -51,6 +51,7 @@ class Simulation:
             time.sleep(0.5)
         
     def visualization(self, rnd = None):
+
         plt.figure(1)
         plt.clf()
         # for stopping simulation with the esc key.
@@ -68,12 +69,12 @@ class Simulation:
             
             plt.plot(x,y, "-g")
         
-        if self.planner.temptrajectory23 is not None:
+        if self.planner.trajectory23 is not None:
             
             x = []
             y = []
 
-            for trajectory_point in self.planner.temptrajectory23:   
+            for trajectory_point in self.planner.trajectory23:   
                 x += [trajectory_point.x]
                 y += [trajectory_point.y]
             
@@ -98,9 +99,12 @@ class Simulation:
                      "-k")
 
         #plt.axis([-2, 22, -2, 22])
+
         plt.grid(True)
         plt.axis("equal")
-        plt.pause(0.01)
+        plt.draw()
+        #plt.pause(0.1)
+        #plt.show(block=False)
 
     def LinePlot(self):
 

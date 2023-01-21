@@ -3,7 +3,6 @@ from statemachine import StateMachine, State
 import pyclothoids
 
 class TrajectoryPoint:
-
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
         self.t = t
         self.s = s
@@ -15,7 +14,6 @@ class TrajectoryPoint:
         self.curvature = curvature
 
 class Pose:
-
     def __init__(self, x=None, y=None, yaw=None, curvature=None):
         self.x = x
         self.y = y
@@ -24,22 +22,25 @@ class Pose:
 
 class G2ClothoidPlanner:
 
-    trajectory = []
-    trajectory23 = []
-
     ego_pose = Pose()
     goal_pose = Pose()
 
     ego_on_trajectorylength = 0
     drive_step = 0.3
     
-    def __init__(self, path_res = 0.1,path23_res = 0.1,ego_delta_bilevel = 0.5, goal_delta_bilevel =0.15, max_curvature = 0.5, min_traj_length = 2):
+    def __init__(self, path_res = 0.1,path23_res = 0.1,vx =1.5, ego_delta_bilevel = 0.5, goal_delta_bilevel =0.15, max_curvature = 0.5, min_traj_length = 2):
         self.path_res = path_res
         self.path23_res = path23_res
+        self.vx = vx
+
         self.ego_delta_bilevel = ego_delta_bilevel
         self.goal_delta_bilevel = goal_delta_bilevel
+
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
+
+        self.trajectory = []
+        self.trajectory23 = []
 
     def update_ego_pose_reverse(self):
         return self.ego_pose
@@ -100,7 +101,7 @@ class G2ClothoidPlanner:
         
     def ego_drive_step(self):
 
-        _, self.ego_on_trajectorylength = self.give_latprojection_on_trajectory()
+        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory()
 
         self.ego_on_trajectorylength += self.drive_step
 
@@ -131,71 +132,128 @@ class G2ClothoidPlanner:
 
         g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, self.ego_pose.yaw, 0,\
                                                 self.goal_pose.x, self.goal_pose.y, self.goal_pose.yaw, 0)
-        g2clothoid_trajectory = self.sample_trajectory(g2clothoid_list)
+        
+        self.sample_trajectory_path(g2clothoid_list)
 
-        self.trajectory = g2clothoid_trajectory
-    
-        return self.trajectory
+        self.add_vx2trajectory()
+        self.add_timestamp2trajectory()
 
-    def sample_trajectory(self, g2clothoid_list):
+    def sample_trajectory_path(self, g2clothoid_list):
+
+        self.trajectory.clear()
 
         total_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length
         npt_tar = round(total_length/self.path_res)
         samp_int = total_length/npt_tar
 
-        trajectory_point_list = []
         samp_point = 0
         
         while samp_point < g2clothoid_list[0].length:
 
-            trajectory_point_list.append(TrajectoryPoint(   s=round(samp_point,4),
-                                                            x=round(g2clothoid_list[0].X(samp_point),4),
-                                                            y=round(g2clothoid_list[0].Y(samp_point),4),
-                                                            yaw=round(g2clothoid_list[0].Theta(samp_point),4),
-                                                            curvature=round((g2clothoid_list[0].KappaStart + (g2clothoid_list[0].dk*samp_point)),4)))
+            self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
+                                                    x=round(g2clothoid_list[0].X(samp_point),4),
+                                                    y=round(g2clothoid_list[0].Y(samp_point),4),
+                                                    yaw=round(g2clothoid_list[0].Theta(samp_point),4),
+                                                    curvature=round((g2clothoid_list[0].KappaStart + (g2clothoid_list[0].dk*samp_point)),4)))
 
             samp_point += samp_int
 
         while samp_point-g2clothoid_list[0].length < g2clothoid_list[1].length:
 
-            trajectory_point_list.append(TrajectoryPoint(   s=round(samp_point,4),
-                                                            x=round(g2clothoid_list[1].X(samp_point - g2clothoid_list[0].length),4),
-                                                            y=round(g2clothoid_list[1].Y(samp_point - g2clothoid_list[0].length),4),
-                                                            yaw=round(g2clothoid_list[1].Theta(samp_point - g2clothoid_list[0].length),4),
-                                                            curvature=round((g2clothoid_list[1].KappaStart + (g2clothoid_list[1].dk*(samp_point-g2clothoid_list[0].length))),4)))
+            self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
+                                                    x=round(g2clothoid_list[1].X(samp_point - g2clothoid_list[0].length),4),
+                                                    y=round(g2clothoid_list[1].Y(samp_point - g2clothoid_list[0].length),4),
+                                                    yaw=round(g2clothoid_list[1].Theta(samp_point - g2clothoid_list[0].length),4),
+                                                    curvature=round((g2clothoid_list[1].KappaStart + (g2clothoid_list[1].dk*(samp_point-g2clothoid_list[0].length))),4)))
 
             samp_point += samp_int
 
         while samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length < g2clothoid_list[2].length:
             
-            trajectory_point_list.append(TrajectoryPoint(   s=round(samp_point,4),
-                                                            x=round(g2clothoid_list[2].X(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                            y=round(g2clothoid_list[2].Y(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                            yaw=round(g2clothoid_list[2].Theta(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                            curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length))),4)))
+            self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
+                                                    x=round(g2clothoid_list[2].X(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                    y=round(g2clothoid_list[2].Y(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                    yaw=round(g2clothoid_list[2].Theta(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                    curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length))),4)))
 
             samp_point += samp_int
 
 
-        trajectory_point_list.append(TrajectoryPoint(   s=round(total_length,4),
-                                                        x=round(g2clothoid_list[2].X(g2clothoid_list[2].length),4),
-                                                        y=round(g2clothoid_list[2].Y(g2clothoid_list[2].length),4),
-                                                        yaw=round(g2clothoid_list[2].Theta(g2clothoid_list[2].length),4),
-                                                        curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*g2clothoid_list[2].length)),4)))
+        self.trajectory.append(TrajectoryPoint( s=round(total_length,4),
+                                                x=round(g2clothoid_list[2].X(g2clothoid_list[2].length),4),
+                                                y=round(g2clothoid_list[2].Y(g2clothoid_list[2].length),4),
+                                                yaw=round(g2clothoid_list[2].Theta(g2clothoid_list[2].length),4),
+                                                curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*g2clothoid_list[2].length)),4)))
 
+    def resample_trajectory23(self):
+
+        self.trajectory23.clear()
+
+        #_,length_on_trajectory = self.give_latprojection_on_trajectory()
+        _,length_on_trajectory = self.give_closestprojection_on_trajectory()
+
+        j = 1
+        trajectory23_cnt = 0
+
+        while j < len(self.trajectory) and trajectory23_cnt < 23:
+            
+            if self.trajectory[j-1].s <= length_on_trajectory < self.trajectory[j].s:
+
+                new_traj_point = TrajectoryPoint(s=length_on_trajectory-self.trajectory[-1].s)
+
+                new_traj_point.x = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].x,self.trajectory[j].x,length_on_trajectory)
+
+                new_traj_point.y = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].y,self.trajectory[j].y,length_on_trajectory)
+                
+                new_traj_point.yaw = np.deg2rad(self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            (np.rad2deg(self.trajectory[j-1].yaw)+360)%360,(np.rad2deg(self.trajectory[j].yaw)+360)%360,length_on_trajectory))
+
+                new_traj_point.curvature = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].curvature,self.trajectory[j].curvature,length_on_trajectory)
+
+                new_traj_point.vx = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].vx,self.trajectory[j].vx,length_on_trajectory)
+
+                self.trajectory23.append(new_traj_point)
+
+                length_on_trajectory += self.path23_res
+                trajectory23_cnt += 1
+                j = 0
+                
+            j += 1
+    
+    def add_vx2trajectory(self):
+
+        self.trajectory.reverse()
+
+        braking_dis = 0.5
+        m=self.vx/braking_dis
+
+        for trajectory_point in self.trajectory:
+
+            if abs(trajectory_point.s - self.trajectory[0].s) <= braking_dis:
+
+                trajectory_point.vx = round((m*abs(trajectory_point.s - self.trajectory[0].s)),4)
+            else:
+                trajectory_point.vx = self.vx
+
+        self.trajectory.reverse()
+
+    def add_timestamp2trajectory(self):
+
+        i = 1
+
+        sum = 0
+        self.trajectory[0].t = sum
         
-        trajectory_point_list.reverse()
-        x = 0
+        while i < len(self.trajectory):
 
-        for trajectory_point in trajectory_point_list:
-
-            trajectory_point.vx = round(1/(1+np.exp((-4*x)+2)),3)
-
-            x += samp_int
-
-        trajectory_point_list.reverse()
-
-        return trajectory_point_list
+            sum += self.trapez_integral(self.divide_ZE(1,self.trajectory[i-1].vx),self.divide_ZE(1,self.trajectory[i].vx),self.trajectory[i-1].s,self.trajectory[i].s)
+            self.trajectory[i].t = sum 
+        
+            i += 1
 
     def give_closestprojection_on_trajectory(self):
 
@@ -242,45 +300,6 @@ class G2ClothoidPlanner:
                 return Pose(x,y), length_on_trajectory
             
             i += 1
-
-    def resample_trajectory23(self):
-
-        #_,length_on_trajectory = self.give_latprojection_on_trajectory()
-        _,length_on_trajectory = self.give_closestprojection_on_trajectory()
-
-        trajectory23 = []
-        j = 1
-        trajectory23_cnt = 0
-
-        while j < len(self.trajectory) and trajectory23_cnt < 23:
-            
-            if self.trajectory[j-1].s <= length_on_trajectory < self.trajectory[j].s:
-
-                new_traj_point = TrajectoryPoint(s=length_on_trajectory-self.trajectory[-1].s)
-
-                new_traj_point.x = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
-                                                            self.trajectory[j-1].x,self.trajectory[j].x,length_on_trajectory)
-
-                new_traj_point.y = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
-                                                            self.trajectory[j-1].y,self.trajectory[j].y,length_on_trajectory)
-                
-                new_traj_point.yaw = np.deg2rad(self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
-                                                            (np.rad2deg(self.trajectory[j-1].yaw)+360)%360,(np.rad2deg(self.trajectory[j].yaw)+360)%360,length_on_trajectory))
-
-                new_traj_point.curvature = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
-                                                            self.trajectory[j-1].curvature,self.trajectory[j].curvature,length_on_trajectory)
-
-                new_traj_point.vx = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
-                                                            self.trajectory[j-1].vx,self.trajectory[j].vx,length_on_trajectory)
-
-                trajectory23.append(new_traj_point)
-
-                length_on_trajectory += self.path23_res
-                trajectory23_cnt += 1
-                j = 0
-                
-            j += 1
-            self.temptrajectory23 = trajectory23
             
     @staticmethod
     def calc_lin_interpol(x1,x2,y1,y2,x3):
@@ -315,4 +334,15 @@ class G2ClothoidPlanner:
         d = np.hypot(dx, dy)
         theta = PoseA.yaw - PoseB.yaw
         return d, theta
+    
+    @staticmethod
+    def trapez_integral(fa,fb,a,b):
+        return ((b-a)/2) * (fa+fb)
+
+    @staticmethod
+    def divide_ZE(x,y):
+        try:
+            return x/y
+        except ZeroDivisionError:
+            return 0
 
