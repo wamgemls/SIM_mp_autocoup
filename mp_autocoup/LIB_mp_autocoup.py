@@ -1,5 +1,4 @@
 import numpy as np
-from statemachine import StateMachine, State
 import pyclothoids
 
 class TrajectoryPoint:
@@ -20,13 +19,13 @@ class Pose:
         self.yaw = yaw
         self.curvature = curvature
 
-class G2ClothoidPlanner:
+class AutocoupPlanner:
 
     ego_pose = Pose()
     goal_pose = Pose()
 
     ego_on_trajectorylength = 0
-    drive_step = 0.3
+    drive_step = 0.1
     
     def __init__(self, path_res = 0.1,path23_res = 0.1,vx =1.5, ego_delta_bilevel = 0.5, goal_delta_bilevel =0.15, max_curvature = 0.5, min_traj_length = 2):
         self.path_res = path_res
