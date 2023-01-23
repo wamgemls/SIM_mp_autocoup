@@ -12,8 +12,8 @@ class Simulation:
             
         self.planner = AutocoupPlanner()
         
-        self.init_pose = Pose(None,3,5, np.deg2rad(200),0)
-        self.goal_pose = Pose(None,12.25,13.6, np.deg2rad(185),0)
+        self.init_pose = Pose(None,3,5, np.deg2rad(200),0,0)
+        self.goal_pose = Pose(None,12.25,13.6, np.deg2rad(185),0,0)
         self.planner.update_ego_pose(self.init_pose)
         self.ego_pose = self.init_pose
 
@@ -23,9 +23,7 @@ class Simulation:
     
         counter = 0
 
-
         while True:
-
 
             print("cycle: ", counter)
             counter += 1
@@ -37,11 +35,9 @@ class Simulation:
 
             self.planner.cycle()
             
-            self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory],[tpoint.y for tpoint in self.planner.trajectory],\
+            self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory_p1],[tpoint.y for tpoint in self.planner.trajectory_p1],\
                                                     [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
-
             self.animation.update_pose_vis(self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,self.goal_pose.x,self.goal_pose.y,self.goal_pose.yaw)
-
 
             self.planner.ego_drive_step()
 
