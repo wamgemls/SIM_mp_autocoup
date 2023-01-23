@@ -16,24 +16,27 @@ class Simulation:
             self.ymax = float(area[3])
 
     def __init__(self, init_pose, goal_pose,play_area):
-        self.planner = AutocoupPlanner()
         
-        self.init_pose = Pose(init_pose[0],init_pose[1],init_pose[2], init_pose[3])
-        self.goal_pose = Pose(goal_pose[0],goal_pose[1],goal_pose[2], goal_pose[3])
-        self.planner.update_ego_pose(self.init_pose)
-        self.ego = self.init_pose
-
         if play_area is not None:
             self.play_area = self.AreaBounds(play_area)
         else:
             self.play_area = None
-    
+            
+        
+        self.planner = AutocoupPlanner()
+        
+        self.init_pose = Pose(None,init_pose[0],init_pose[1],init_pose[2], init_pose[3])
+        self.goal_pose = Pose(None,goal_pose[0],goal_pose[1],goal_pose[2], goal_pose[3])
+        self.planner.update_ego_pose(self.init_pose)
+        self.ego = self.init_pose
+
+        self.animation = AutocoupAnimation()
+
     def simulate(self):
     
         counter = 0
 
-        Animation = AutocoupAnimation()
-        
+
         while True:
 
 
@@ -42,20 +45,20 @@ class Simulation:
 
             self.ego = self.planner.update_ego_pose_reverse()
 
-            #self.plannermachine.planner.update_ego_pose(self.ego)
+            #self.planner.update_ego_pose(self.ego)
             self.planner.update_goal_pose(self.goal_pose)
 
             self.planner.cycle()
             
-            Animation.update_trajectory_vis(    [tpoint.x for tpoint in self.planner.trajectory],[tpoint.y for tpoint in self.planner.trajectory],\
-                                                [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
+            self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory],[tpoint.y for tpoint in self.planner.trajectory],\
+                                                    [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
 
-            Animation.update_pose_vis(self.ego.x,self.ego.y,self.ego.yaw,self.goal_pose.x,self.goal_pose.y,self.goal_pose.yaw)
+            #Animation.update_pose_vis(self.ego.x,self.ego.y,self.ego.yaw,self.goal_pose.x,self.goal_pose.y,self.goal_pose.yaw)
 
 
             self.planner.ego_drive_step()
 
-            time.sleep(0.5)
+            #time.sleep(0.5)
 
     @staticmethod
     def check_if_outside_play_area(node, play_area):

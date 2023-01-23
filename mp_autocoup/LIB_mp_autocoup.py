@@ -13,7 +13,8 @@ class TrajectoryPoint:
         self.curvature = curvature
 
 class Pose:
-    def __init__(self, x=None, y=None, yaw=None, curvature=None):
+    def __init__(self, t=None,x=None, y=None, yaw=None, curvature=None):
+        self.t = t
         self.x = x
         self.y = y
         self.yaw = yaw
@@ -27,7 +28,7 @@ class AutocoupPlanner:
     ego_on_trajectorylength = 0
     drive_step = 0.1
     
-    def __init__(self, path_res = 0.1,path23_res = 0.1,vx =1.5, ego_delta_bilevel = 0.5, goal_delta_bilevel =0.15, max_curvature = 0.5, min_traj_length = 2):
+    def __init__(self, path_res = 0.1,path23_res = 0.1,vx = 1.5, ego_delta_bilevel = 0.5, goal_delta_bilevel =0.15, max_curvature = 0.5, min_traj_length = 2):
         self.path_res = path_res
         self.path23_res = path23_res
         self.vx = vx
@@ -136,6 +137,7 @@ class AutocoupPlanner:
 
         self.add_vx2trajectory()
         self.add_timestamp2trajectory()
+        self.add_ax2trajectory()
 
     def sample_trajectory_path(self, g2clothoid_list):
 
@@ -194,11 +196,18 @@ class AutocoupPlanner:
         j = 1
         trajectory23_cnt = 0
 
+        length_offset = length_on_trajectory
+        time_offset = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                self.trajectory[j-1].t,self.trajectory[j].t,length_on_trajectory)
+
         while j < len(self.trajectory) and trajectory23_cnt < 23:
             
             if self.trajectory[j-1].s <= length_on_trajectory < self.trajectory[j].s:
 
-                new_traj_point = TrajectoryPoint(s=length_on_trajectory-self.trajectory[-1].s)
+                new_traj_point = TrajectoryPoint(s=(self.path23_res*trajectory23_cnt))
+
+                new_traj_point.t = (self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].t,self.trajectory[j].t,length_on_trajectory) - time_offset)
 
                 new_traj_point.x = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
                                                             self.trajectory[j-1].x,self.trajectory[j].x,length_on_trajectory)
@@ -214,6 +223,9 @@ class AutocoupPlanner:
 
                 new_traj_point.vx = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
                                                             self.trajectory[j-1].vx,self.trajectory[j].vx,length_on_trajectory)
+                
+                new_traj_point.ax = self.calc_lin_interpol(self.trajectory[j-1].s,self.trajectory[j].s,\
+                                                            self.trajectory[j-1].ax,self.trajectory[j].ax,length_on_trajectory)
 
                 self.trajectory23.append(new_traj_point)
 
@@ -253,6 +265,18 @@ class AutocoupPlanner:
             self.trajectory[i].t = sum 
         
             i += 1
+
+    def add_ax2trajectory(self):
+
+        i = 1
+
+        while i < len(self.trajectory):
+
+            self.trajectory[i-1].ax = abs(self.trajectory[i].vx-self.trajectory[i-1].vx)/abs(self.trajectory[i].t-self.trajectory[i-1].t)
+
+            i += 1
+            
+        self.trajectory[-1].ax = 0
 
     def give_closestprojection_on_trajectory(self):
 

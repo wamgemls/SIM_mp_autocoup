@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
-import random
 
 plt.ion()
 
@@ -17,8 +16,8 @@ class AutocoupAnimation():
         self.trajectory, = self.ax.plot([],[], '-g')
         self.trajectory23, = self.ax.plot([],[],'-r')
 
-        self.ego_pose = patches.FancyArrow(0,0,0,0,fc="r", ec="k")
-        self.goal_pose = patches.FancyArrow(0,0,0,0,fc="r", ec="k")
+        self.ego_arrow = patches.FancyArrow(0,0,0,0,fc="r", ec="k")
+        self.goal_arrow = patches.FancyArrow(0,0,0,0,fc="r", ec="k")
 
         #Autoscale on unknown axis and known lims on the other
         self.ax.set_autoscaley_on(True)
@@ -38,12 +37,12 @@ class AutocoupAnimation():
         self.update_figure()
 
     def update_pose_vis(self,ego_x,ego_y,ego_yaw,goal_x,goal_y,goal_yaw):
-        
-        self.ego_pose.set_data(x=ego_x, y= ego_y, dx=0.75 * np.cos(ego_yaw), dy=0.75 * np.sin(ego_yaw), head_width=0.75, head_length=0.75)
-        self.ax.add_patch(self.ego_pose)
 
-        self.goal_pose.set_data(x=goal_x, y= goal_y, dx=0.75 * np.cos(goal_yaw), dy=0.75 * np.sin(goal_yaw), head_width=0.75, head_length=0.75)
-        self.ax.add_patch(self.goal_pose)
+        self.ego_arrow.set_data(x=ego_x,y=ego_y, dx=0.75 * np.cos(ego_yaw), dy=0.75 * np.sin(ego_yaw), head_width=0.75, head_length=0.75)
+        self.ax.add_patch(self.ego_arrow)
+
+        self.goal_arrow.set_data(x=goal_x,y=goal_y, dx=0.75 * np.cos(goal_yaw), dy=0.75 * np.sin(goal_yaw), head_width=0.75, head_length=0.75)
+        self.ax.add_patch(self.goal_arrow)
         
         self.update_figure()
 
