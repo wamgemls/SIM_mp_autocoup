@@ -58,7 +58,7 @@ class Simulation:
 
             self.planner.ego_drive_step()
 
-            #time.sleep(0.5)
+            time.sleep(0.5)
 
     @staticmethod
     def check_if_outside_play_area(node, play_area):

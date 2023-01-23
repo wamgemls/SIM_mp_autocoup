@@ -63,7 +63,7 @@ class AutocoupPlanner:
             else:
                 print("Abort Mission: not feasible or too short")
         else: 
-            print("goal reached")
+            print("goal reacheed")
 
     def goal_not_reached(self):
 

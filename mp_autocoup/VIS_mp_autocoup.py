@@ -5,7 +5,7 @@ import numpy as np
 plt.ion()
 
 class AutocoupAnimation():
-    #Suppose we know the x range
+    #Suppose we know the x ranges
     min_x = 0
     max_x = 20
 
