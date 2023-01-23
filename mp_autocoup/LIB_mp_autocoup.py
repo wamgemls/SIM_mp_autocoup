@@ -130,11 +130,12 @@ class AutocoupPlanner:
 
     def generate_trajectory(self):
 
-        g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, self.ego_pose.yaw, 0,\
-                                                self.goal_pose.x, self.goal_pose.y, self.goal_pose.yaw, 0)
+        g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, self.angle_interval(self.ego_pose.yaw-np.pi), 0,\
+                                                self.goal_pose.x, self.goal_pose.y, self.angle_interval(self.goal_pose.yaw-np.pi), 0)
         
         self.sample_trajectory_path(g2clothoid_list)
 
+        self.offset_yaw()
         self.add_vx2trajectory()
         self.add_timestamp2trajectory()
         self.add_ax2trajectory()
@@ -149,7 +150,7 @@ class AutocoupPlanner:
 
         samp_point = 0
         
-        while samp_point < g2clothoid_list[0].length:
+        while samp_point <= g2clothoid_list[0].length and len(self.trajectory) <= npt_tar:
 
             self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
                                                     x=round(g2clothoid_list[0].X(samp_point),4),
@@ -159,7 +160,7 @@ class AutocoupPlanner:
 
             samp_point += samp_int
 
-        while samp_point-g2clothoid_list[0].length < g2clothoid_list[1].length:
+        while samp_point-g2clothoid_list[0].length <= g2clothoid_list[1].length and len(self.trajectory) <= npt_tar:
 
             self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
                                                     x=round(g2clothoid_list[1].X(samp_point - g2clothoid_list[0].length),4),
@@ -169,7 +170,7 @@ class AutocoupPlanner:
 
             samp_point += samp_int
 
-        while samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length < g2clothoid_list[2].length:
+        while samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length <= g2clothoid_list[2].length and len(self.trajectory) <= npt_tar:
             
             self.trajectory.append(TrajectoryPoint( s=round(samp_point,4),
                                                     x=round(g2clothoid_list[2].X(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
@@ -179,12 +180,13 @@ class AutocoupPlanner:
 
             samp_point += samp_int
 
-
+        
         self.trajectory.append(TrajectoryPoint( s=round(total_length,4),
                                                 x=round(g2clothoid_list[2].X(g2clothoid_list[2].length),4),
                                                 y=round(g2clothoid_list[2].Y(g2clothoid_list[2].length),4),
                                                 yaw=round(g2clothoid_list[2].Theta(g2clothoid_list[2].length),4),
                                                 curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*g2clothoid_list[2].length)),4)))
+        
 
     def resample_trajectory23(self):
 
@@ -234,7 +236,12 @@ class AutocoupPlanner:
                 j = 0
                 
             j += 1
-    
+
+    def offset_yaw(self):
+
+        for trajectory_point in self.trajectory:
+            trajectory_point.yaw = self.angle_interval(trajectory_point.yaw-np.pi)
+
     def add_vx2trajectory(self):
 
         self.trajectory.reverse()
@@ -272,7 +279,7 @@ class AutocoupPlanner:
 
         while i < len(self.trajectory):
 
-            self.trajectory[i-1].ax = abs(self.trajectory[i].vx-self.trajectory[i-1].vx)/abs(self.trajectory[i].t-self.trajectory[i-1].t)
+            self.trajectory[i-1].ax = (self.trajectory[i].vx-self.trajectory[i-1].vx)/(self.trajectory[i].t-self.trajectory[i-1].t)
 
             i += 1
             
@@ -368,4 +375,8 @@ class AutocoupPlanner:
             return x/y
         except ZeroDivisionError:
             return 0
+
+    @staticmethod
+    def angle_interval(angle):
+        return (angle + np.pi) % (2*np.pi) - np.pi
 
