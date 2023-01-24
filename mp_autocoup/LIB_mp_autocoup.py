@@ -23,13 +23,10 @@ class Pose:
 
 class AutocoupPlanner:
 
-    ego_pose = Pose()
-    goal_pose = Pose()
-
     ego_on_trajectorylength = 0
-    drive_step = 0.1
+    drive_step = 0.2
     
-    def __init__(self, path_res=0.1, path23_res=0.1, vx=1.5, ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.5, min_traj_length=2):
+    def __init__(self, path_res=0.1, path23_res=0.1, vx=-1.5, ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2):
         self.path_res = path_res
         self.path23_res = path23_res
         self.vx = vx
@@ -40,50 +37,98 @@ class AutocoupPlanner:
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
 
+        self.linear_backup = 1
+
+        self.init_pose = Pose()
+        self.ego_pose = Pose()
+        self.prekingpin_pose = Pose()
+        self.kingpin_pose = Pose()
+
         self.trajectory_p1 = []
         self.trajectory_p2 = []
 
         self.trajectory23 = []
 
-    def update_ego_pose_reverse(self):
-        return self.ego_pose
+    def update_pose_reverse(self):
+        return self.ego_pose,self.prekingpin_pose
 
-    def update_ego_pose(self, ego_pose):
+    def update_pose(self, init_pose, ego_pose, kingpin_pose):
+        self.init_pose = init_pose
         self.ego_pose = ego_pose
+        self.kingpin_pose = kingpin_pose
+        self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
-    def update_goal_pose(self,goal_pose):
-        self.goal_pose = goal_pose
+    @staticmethod
+    def calc_prekingpin_pose(kingpin_pose):
+
+        prekingpin_x = kingpin_pose.x + (2*np.cos(kingpin_pose.yaw))
+        prekingpin_y = kingpin_pose.y + (2*np.sin(kingpin_pose.yaw))
+        
+        return Pose(kingpin_pose.t,prekingpin_x,prekingpin_y,kingpin_pose.yaw,kingpin_pose.vx,kingpin_pose.curvature)
 
     def cycle(self):
         
-        if self.goal_not_reached():
+        if self.pose_validation():
 
-            self.bilevel_check()
+            print("pose_validation",end=' -> ')
 
-            if self.feasibility_check():
-                self.resample_trajectory23()
+            if self.coupling_phase_2():
+                print("phase_2")
+                self.resample_trajectory23(self.trajectory_p2)
                 return self.trajectory23
+
+            elif self.coupling_phase_1():
+                print("phase_1")
+
+                if not self.trajectory_p1 or not self.trajectory_p2:
+                    self.generate_trajectory()
+
+                self.bilevel_check()
+
+                if self.feasibility_check():
+                    self.resample_trajectory23(self.trajectory_p1)
+                    return self.trajectory23
+                else:
+                    print("abort_mission")   
             else:
-                print("Abort Mission: not feasible or too short")
-        else: 
-            print("goal reacheed")
+                print("invalid_phase")
+        else:
+            print("invalid_pose")
 
-    def goal_not_reached(self):
 
-        distance_ego_goal, theta_ego_goal = self.calc_distance_angle_PoseA_PoseB(self.ego_pose,self.goal_pose)
+    def pose_validation(self):
+        return True
 
-        if distance_ego_goal > 0.3:
+    def coupling_phase_1(self):
+
+        return True
+
+        """
+        dis_ego_prekingpin,theta_ego_prekingpin = self.calc_distance_angle_PoseA_PoseB(self.ego_pose,self.prekingpin_pose)
+
+        if dis_ego_prekingpin > 2:
+            return True
+        else:
+            return False
+        """
+
+    def coupling_phase_2(self):
+
+        if not self.trajectory_p2:
+            self.sample_trajectory_p2()
+
+        point_on_trajectory,_ = self.give_closestprojection_on_trajectory(self.trajectory_p2)
+        dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
+
+        if dis_ego_traj < 0.3 and theta_ego_traj < 0.1:
             return True
         else:
             return False
 
     def bilevel_check(self):
 
-        if not self.trajectory_p1:
-            self.generate_trajectory()
-
-        dis_goal_trajgoal, theta_goal_trajgoal = self.calc_distance_angle_PoseA_PoseB(self.trajectory_p1[-1],self.goal_pose)
-        point_on_trajectory,_ = self.give_closestprojection_on_trajectory()
+        dis_goal_trajgoal, theta_goal_trajgoal = self.calc_distance_angle_PoseA_PoseB(self.trajectory_p1[-1],self.prekingpin_pose)
+        point_on_trajectory,_ = self.give_closestprojection_on_trajectory(self.trajectory_p1)
         dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
 
         if dis_goal_trajgoal > self.goal_delta_bilevel and dis_ego_traj > self.ego_delta_bilevel:
@@ -104,28 +149,28 @@ class AutocoupPlanner:
         
     def ego_drive_step(self):
 
-        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory()
+        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory(self.trajectory23)
 
         self.ego_on_trajectorylength += self.drive_step
 
         i = 1
         
-        while i < len(self.trajectory_p1):
+        while i < len(self.trajectory23):
 
-            if self.trajectory_p1[i-1].s <= self.ego_on_trajectorylength < self.trajectory_p1[i].s:
+            if self.trajectory23[i-1].s <= self.ego_on_trajectorylength < self.trajectory23[i].s:
                 
-                x = self.calc_lin_interpol(self.trajectory_p1[i-1].s,self.trajectory_p1[i].s,\
-                                            self.trajectory_p1[i-1].x,self.trajectory_p1[i].x,self.ego_on_trajectorylength)
+                x = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                            self.trajectory23[i-1].x,self.trajectory23[i].x,self.ego_on_trajectorylength)
 
-                y = self.calc_lin_interpol(self.trajectory_p1[i-1].s,self.trajectory_p1[i].s,\
-                                            self.trajectory_p1[i-1].y,self.trajectory_p1[i].y,self.ego_on_trajectorylength)
+                y = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                            self.trajectory23[i-1].y,self.trajectory23[i].y,self.ego_on_trajectorylength)
                 
-                yaw =self.calc_lin_interpol_angle(self.trajectory_p1[i-1].s,self.trajectory_p1[i].s,\
-                                                    self.trajectory_p1[i-1].yaw,self.trajectory_p1[i].yaw,self.ego_on_trajectorylength)
+                yaw =self.calc_lin_interpol_angle(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                                    self.trajectory23[i-1].yaw,self.trajectory23[i].yaw,self.ego_on_trajectorylength)
 
                 self.ego_pose.x = x + np.random.normal(0,0.1)
                 self.ego_pose.y = y + np.random.normal(0,0.1)
-                self.ego_pose.yaw = yaw + np.random.normal(0,0.01)
+                self.ego_pose.yaw = yaw #+ np.random.normal(0,0.01)
                 
                 break
         
@@ -133,21 +178,28 @@ class AutocoupPlanner:
 
     def generate_trajectory(self):
 
-        g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, self.angle_interval(self.ego_pose.yaw+np.pi), self.ego_pose.curvature,\
-                                                self.goal_pose.x, self.goal_pose.y, self.angle_interval(self.goal_pose.yaw+np.pi), self.goal_pose.curvature)
-        
-        self.sample_trajectory_path(g2clothoid_list)
-
-        self.offset_yaw()
-        self.add_vx2trajectory()
-        self.add_timestamp2trajectory()
-        self.add_ax2trajectory()
-
-    def sample_trajectory_path(self, g2clothoid_list):
-
         self.trajectory_p1.clear()
+        self.sample_trajectory_p1()
 
-        total_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length
+        self.trajectory_p2.clear()
+        self.sample_trajectory_p2()
+
+    def sample_trajectory_p1(self):
+
+        #rotate angles by 180 (backward driving)
+        ego_calc_angle = self.angle_interval(self.ego_pose.yaw+np.pi)
+        preprekingpin_calc_angel = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
+        
+        #add 1m linear path (controller backup)
+        preprekingpin_calc_x = self.prekingpin_pose.x - (self.linear_backup*np.cos(preprekingpin_calc_angel))
+        preprekingpin_calc_y = self.prekingpin_pose.y - (self.linear_backup*np.sin(preprekingpin_calc_angel))
+
+        g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, ego_calc_angle, self.ego_pose.curvature,\
+                                                preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angel, 0)
+        
+        #self.sample_trajectory_p1_path(g2clothoid_list)
+
+        total_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length + self.linear_backup
         npt_tar = round(total_length/self.path_res)
         samp_int = total_length/npt_tar
 
@@ -184,53 +236,90 @@ class AutocoupPlanner:
             samp_point += samp_int
 
         
-        self.trajectory_p1.append(TrajectoryPoint( s=round(total_length,4),
-                                                x=round(g2clothoid_list[2].X(g2clothoid_list[2].length),4),
-                                                y=round(g2clothoid_list[2].Y(g2clothoid_list[2].length),4),
-                                                yaw=round(g2clothoid_list[2].Theta(g2clothoid_list[2].length),4),
-                                                curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*g2clothoid_list[2].length)),4)))
+        linear_length = samp_int
         
+        while samp_point < total_length and len(self.trajectory_p1) <= npt_tar:
 
-    def resample_trajectory23(self):
+            self.trajectory_p1.append(TrajectoryPoint(s=round(samp_point,4),
+                                                        x = round(preprekingpin_calc_x + (linear_length * np.cos(preprekingpin_calc_angel)),4),
+                                                        y = round(preprekingpin_calc_y + (linear_length * np.sin(preprekingpin_calc_angel)),4),
+                                                        yaw = round(preprekingpin_calc_angel,4),
+                                                        curvature=0))
+
+            linear_length += samp_int
+            samp_point += samp_int
+
+        self.offset_yaw(self.trajectory_p1)
+        self.add_vx2trajectory(self.trajectory_p1)
+        self.add_timestamp2trajectory(self.trajectory_p1)
+        self.add_ax2trajectory(self.trajectory_p1)
+
+    def sample_trajectory_p2(self):
+
+        dis_prekingpin_kingpin,_ = self.calc_distance_angle_PoseA_PoseB(self.prekingpin_pose,self.kingpin_pose)
+        total_length = dis_prekingpin_kingpin + 2
+        npt_tar = round(total_length/self.path_res)
+        samp_int = total_length/npt_tar
+
+        traj_yaw = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
+
+        samp_point = 0
+
+        while samp_point < total_length and len(self.trajectory_p2) <= npt_tar:
+
+            self.trajectory_p2.append(TrajectoryPoint(s=round(samp_point,4),
+                                                        x = round(self.prekingpin_pose.x + (samp_point * np.cos(traj_yaw)),4),
+                                                        y = round(self.prekingpin_pose.y + (samp_point * np.sin(traj_yaw)),4),
+                                                        yaw = round(traj_yaw,4),
+                                                        curvature=0))
+
+            samp_point += samp_int
+
+        self.offset_yaw(self.trajectory_p2)
+        self.add_vx2trajectory(self.trajectory_p2)
+        self.add_timestamp2trajectory(self.trajectory_p2)
+        self.add_ax2trajectory(self.trajectory_p2)
+
+    def resample_trajectory23(self,trajectory):
 
         self.trajectory23.clear()
 
         #_,length_on_trajectory = self.give_latprojection_on_trajectory()
-        _,length_on_trajectory = self.give_closestprojection_on_trajectory()
+        _,length_on_trajectory = self.give_closestprojection_on_trajectory(trajectory)
 
         j = 1
         trajectory23_cnt = 0
 
         length_offset = length_on_trajectory
-        time_offset = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                self.trajectory_p1[j-1].t,self.trajectory_p1[j].t,length_on_trajectory)
+        time_offset = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                trajectory[j-1].t,trajectory[j].t,length_on_trajectory)
 
-        while j < len(self.trajectory_p1) and trajectory23_cnt < 23:
+        while j < len(trajectory) and trajectory23_cnt < 23:
             
-            if self.trajectory_p1[j-1].s <= length_on_trajectory < self.trajectory_p1[j].s:
+            if trajectory[j-1].s <= length_on_trajectory < trajectory[j].s:
 
                 new_traj_point = TrajectoryPoint(s=(self.path23_res*trajectory23_cnt))
 
-                new_traj_point.t = (self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].t,self.trajectory_p1[j].t,length_on_trajectory) - time_offset)
+                new_traj_point.t = (self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                            trajectory[j-1].t,trajectory[j].t,length_on_trajectory) - time_offset)
 
-                new_traj_point.x = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].x,self.trajectory_p1[j].x,length_on_trajectory)
+                new_traj_point.x = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                            trajectory[j-1].x,trajectory[j].x,length_on_trajectory)
 
-                new_traj_point.y = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].y,self.trajectory_p1[j].y,length_on_trajectory)
+                new_traj_point.y = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                            trajectory[j-1].y,trajectory[j].y,length_on_trajectory)
                 
-                new_traj_point.yaw = self.calc_lin_interpol_angle(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                                    self.trajectory_p1[j-1].yaw,self.trajectory_p1[j].yaw,length_on_trajectory)
+                new_traj_point.yaw = self.calc_lin_interpol_angle(trajectory[j-1].s,trajectory[j].s,\
+                                                                    trajectory[j-1].yaw,trajectory[j].yaw,length_on_trajectory)
 
-                new_traj_point.curvature = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].curvature,self.trajectory_p1[j].curvature,length_on_trajectory)
+                new_traj_point.curvature = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                                    trajectory[j-1].curvature,trajectory[j].curvature,length_on_trajectory)
 
-                new_traj_point.vx = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].vx,self.trajectory_p1[j].vx,length_on_trajectory)
+                new_traj_point.vx = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                            trajectory[j-1].vx,trajectory[j].vx,length_on_trajectory)
                 
-                new_traj_point.ax = self.calc_lin_interpol(self.trajectory_p1[j-1].s,self.trajectory_p1[j].s,\
-                                                            self.trajectory_p1[j-1].ax,self.trajectory_p1[j].ax,length_on_trajectory)
+                new_traj_point.ax = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
+                                                            trajectory[j-1].ax,trajectory[j].ax,length_on_trajectory)
 
                 self.trajectory23.append(new_traj_point)
 
@@ -240,59 +329,61 @@ class AutocoupPlanner:
                 
             j += 1
 
-    def offset_yaw(self):
+    def offset_yaw(self,trajectory):
 
-        for trajectory_point in self.trajectory_p1:
+        for trajectory_point in trajectory:
             trajectory_point.yaw = self.angle_interval(trajectory_point.yaw-np.pi)
 
-    def add_vx2trajectory(self):
+    def add_vx2trajectory(self,trajectory):
 
-        self.trajectory_p1.reverse()
+        acc_dece_dis = 0.5
+        m_acceleration = (self.vx-self.ego_pose.vx)/acc_dece_dis
+        m_deceleration = self.vx/acc_dece_dis
 
-        braking_dis = 0.5
-        m=self.vx/braking_dis
+        for trajectory_point in trajectory:
 
-        for trajectory_point in self.trajectory_p1:
+            if trajectory_point.s <= acc_dece_dis:
 
-            if abs(trajectory_point.s - self.trajectory_p1[0].s) <= braking_dis:
+                trajectory_point.vx = m_acceleration*trajectory_point.s+self.ego_pose.vx
 
-                trajectory_point.vx = round((m*abs(trajectory_point.s - self.trajectory_p1[0].s)),4)
+            elif trajectory_point.s >= trajectory[-1].s - acc_dece_dis:
+
+                trajectory_point.vx = -m_deceleration*(trajectory_point.s-trajectory[-1].s)
+
             else:
                 trajectory_point.vx = self.vx
 
-        self.trajectory_p1.reverse()
-
-    def add_timestamp2trajectory(self):
+    def add_timestamp2trajectory(self,trajectory):
 
         i = 1
 
         sum = 0
-        self.trajectory_p1[0].t = sum
+        trajectory[0].t = sum
         
-        while i < len(self.trajectory_p1):
+        while i < len(trajectory):
 
-            sum += self.trapez_integral(self.divide_ZE(1,self.trajectory_p1[i-1].vx),self.divide_ZE(1,self.trajectory_p1[i].vx),self.trajectory_p1[i-1].s,self.trajectory_p1[i].s)
-            self.trajectory_p1[i].t = sum 
+            sum += self.trapez_integral(abs(self.divide_ZE(1,-trajectory[i-1].vx)),abs(self.divide_ZE(1,-trajectory[i].vx)),trajectory[i-1].s,trajectory[i].s)
+            trajectory[i].t = sum 
         
             i += 1
 
-    def add_ax2trajectory(self):
+    def add_ax2trajectory(self,trajectory):
 
         i = 1
 
-        while i < len(self.trajectory_p1):
+        while i < len(trajectory):
 
-            self.trajectory_p1[i-1].ax = (self.trajectory_p1[i].vx-self.trajectory_p1[i-1].vx)/(self.trajectory_p1[i].t-self.trajectory_p1[i-1].t)
+            trajectory[i-1].ax = self.divide_ZE((trajectory[i].vx-trajectory[i-1].vx),(trajectory[i].t-trajectory[i-1].t))
 
             i += 1
             
-        self.trajectory_p1[-1].ax = 0
+        trajectory[-1].ax = 0
 
-    def give_closestprojection_on_trajectory(self):
+    def give_closestprojection_on_trajectory(self,trajectory):
 
-        closest_trajpoint = self.trajectory_p1[0]
+        closest_trajpoint = trajectory[0]
 
-        for trajpoint in self.trajectory_p1:
+        for trajpoint in trajectory:
 
             if self.calc_distance_angle_PoseA_PoseB(trajpoint,self.ego_pose) < self.calc_distance_angle_PoseA_PoseB(closest_trajpoint,self.ego_pose):
                 closest_trajpoint = trajpoint
@@ -300,7 +391,7 @@ class AutocoupPlanner:
         return closest_trajpoint, closest_trajpoint.s
 
 
-    def give_latprojection_on_trajectory(self):
+    def give_latprojection_on_trajectory(self,trajectory):
 
         projection_yaw = np.deg2rad((np.rad2deg(self.ego_pose.yaw)+360+90)%360)
 
@@ -313,22 +404,22 @@ class AutocoupPlanner:
 
         i = 1
 
-        while i < len(self.trajectory_p1):
+        while i < len(trajectory):
 
-            x,y = self.find_intersection(self.trajectory_p1[i-1].x,self.trajectory_p1[i].x,self.trajectory_p1[i-1].y,self.trajectory_p1[i].y,\
+            x,y = self.find_intersection(trajectory[i-1].x,trajectory[i].x,trajectory[i-1].y,trajectory[i].y,\
                                             projection_x1,projection_x2,projection_y1,projection_y2)
 
             x = round(x,4)
             y = round(y,4)
 
-            if (self.trajectory_p1[i-1].x <= x <= self.trajectory_p1[i].x or self.trajectory_p1[i-1].x >= x >= self.trajectory_p1[i].x) and\
-                (self.trajectory_p1[i-1].y <= y <= self.trajectory_p1[i].y or self.trajectory_p1[i-1].y >= y >= self.trajectory_p1[i].y):
+            if (trajectory[i-1].x <= x <= trajectory[i].x or trajectory[i-1].x >= x >= trajectory[i].x) and\
+                (trajectory[i-1].y <= y <= trajectory[i].y or trajectory[i-1].y >= y >= trajectory[i].y):
 
-                dx = abs(x-self.trajectory_p1[i-1].x)
-                dy = abs(y-self.trajectory_p1[i-1].y)
+                dx = abs(x-trajectory[i-1].x)
+                dy = abs(y-trajectory[i-1].y)
                 hyp = np.hypot(dx, dy)
 
-                length_on_trajectory = self.trajectory_p1[i-1].s + hyp
+                length_on_trajectory = trajectory[i-1].s + hyp
                 
                 return Pose(x,y), length_on_trajectory
             

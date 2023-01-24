@@ -9,13 +9,14 @@ show_animation = True
 class Simulation:
 
     def __init__(self):
-            
-        self.planner = AutocoupPlanner()
         
-        self.init_pose = Pose(None,3,5, np.deg2rad(200),0,0)
-        self.goal_pose = Pose(None,12.25,13.6, np.deg2rad(185),0,0)
-        self.planner.update_ego_pose(self.init_pose)
+        self.planner = AutocoupPlanner()
+            
+        self.init_pose = Pose(None, 15, 12, np.deg2rad(75), 0, 0)
         self.ego_pose = self.init_pose
+        self.kingpin_pose = Pose(None, 3, 4, np.deg2rad(40), 0, 0)
+        self.prekingpin_pose = Pose()
+        self.planner.update_pose(self.init_pose,self.ego_pose,self.kingpin_pose)
 
         self.animation = AutocoupAnimation()
 
@@ -25,19 +26,21 @@ class Simulation:
 
         while True:
 
-            print("cycle: ", counter)
+            print("cycle: ", counter, " ", end=' -> ')
             counter += 1
 
-            self.ego_pose = self.planner.update_ego_pose_reverse()
-
-            #self.planner.update_ego_pose(self.ego)
-            self.planner.update_goal_pose(self.goal_pose)
+            self.ego_pose,self.prekingpin_pose = self.planner.update_pose_reverse()
+            self.planner.update_pose(self.init_pose,self.ego_pose,self.kingpin_pose)
 
             self.planner.cycle()
             
-            self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory_p1],[tpoint.y for tpoint in self.planner.trajectory_p1],\
+            self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory_p1],[tpoint.y for tpoint in self.planner.trajectory_p1],
+                                                    [tpoint.x for tpoint in self.planner.trajectory_p2],[tpoint.y for tpoint in self.planner.trajectory_p2],
                                                     [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
-            self.animation.update_pose_vis(self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,self.goal_pose.x,self.goal_pose.y,self.goal_pose.yaw)
+            
+            self.animation.update_pose_vis( self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+                                                self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+                                                    self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
 
             self.planner.ego_drive_step()
 
