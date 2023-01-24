@@ -26,7 +26,7 @@ class Simulation:
 
         while True:
 
-            print("cycle: ", counter, " ", end=' -> ')
+            print("cycle: ",counter,end=' -> ')
             counter += 1
 
             self.ego_pose,self.prekingpin_pose = self.planner.update_pose_reverse()
