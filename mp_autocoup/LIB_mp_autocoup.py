@@ -79,12 +79,7 @@ class AutocoupPlanner:
 
             elif self.coupling_phase_1():
                 print("phase_1")
-
-                if not self.trajectory_p1 or not self.trajectory_p2:
-                    self.generate_trajectory()
-
                 self.bilevel_check()
-
                 if self.feasibility_check():
                     self.resample_trajectory23(self.trajectory_p1)
                     return self.trajectory23
@@ -95,22 +90,44 @@ class AutocoupPlanner:
         else:
             print("invalid_pose")
 
+    def ego_drive_step(self):
+
+        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory(self.trajectory23)
+
+        self.ego_on_trajectorylength += self.drive_step
+
+        i = 1
+        
+        while i < len(self.trajectory23):
+
+            if self.trajectory23[i-1].s <= self.ego_on_trajectorylength < self.trajectory23[i].s:
+                
+                x = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                            self.trajectory23[i-1].x,self.trajectory23[i].x,self.ego_on_trajectorylength)
+
+                y = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                            self.trajectory23[i-1].y,self.trajectory23[i].y,self.ego_on_trajectorylength)
+                
+                yaw =self.calc_lin_interpol_angle(self.trajectory23[i-1].s,self.trajectory23[i].s,\
+                                                    self.trajectory23[i-1].yaw,self.trajectory23[i].yaw,self.ego_on_trajectorylength)
+
+                self.ego_pose.x = x + np.random.normal(0,0.1)
+                self.ego_pose.y = y + np.random.normal(0,0.1)
+                self.ego_pose.yaw = yaw #+ np.random.normal(0,0.01)
+                
+                break
+        
+            i += 1
 
     def pose_validation(self):
         return True
 
     def coupling_phase_1(self):
 
+        if not self.trajectory_p1 or not self.trajectory_p2:
+            self.generate_trajectory()
+
         return True
-
-        """
-        dis_ego_prekingpin,theta_ego_prekingpin = self.calc_distance_angle_PoseA_PoseB(self.ego_pose,self.prekingpin_pose)
-
-        if dis_ego_prekingpin > 2:
-            return True
-        else:
-            return False
-        """
 
     def coupling_phase_2(self):
 
@@ -146,35 +163,6 @@ class AutocoupPlanner:
             return True
         else:
             return False
-        
-    def ego_drive_step(self):
-
-        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory(self.trajectory23)
-
-        self.ego_on_trajectorylength += self.drive_step
-
-        i = 1
-        
-        while i < len(self.trajectory23):
-
-            if self.trajectory23[i-1].s <= self.ego_on_trajectorylength < self.trajectory23[i].s:
-                
-                x = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                            self.trajectory23[i-1].x,self.trajectory23[i].x,self.ego_on_trajectorylength)
-
-                y = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                            self.trajectory23[i-1].y,self.trajectory23[i].y,self.ego_on_trajectorylength)
-                
-                yaw =self.calc_lin_interpol_angle(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                                    self.trajectory23[i-1].yaw,self.trajectory23[i].yaw,self.ego_on_trajectorylength)
-
-                self.ego_pose.x = x + np.random.normal(0,0.1)
-                self.ego_pose.y = y + np.random.normal(0,0.1)
-                self.ego_pose.yaw = yaw #+ np.random.normal(0,0.01)
-                
-                break
-        
-            i += 1
 
     def generate_trajectory(self):
 
