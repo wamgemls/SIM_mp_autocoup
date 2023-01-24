@@ -156,7 +156,7 @@ class AutocoupPlanner:
 
         curvature_feasible = True
         for trajectory_point in self.trajectory_p1:
-            if trajectory_point.curvature > self.max_curvature:
+            if abs(trajectory_point.curvature) > self.max_curvature:
                 curvature_feasible = False
 
         if self.trajectory_p1[-1].s > self.min_traj_length and curvature_feasible:
