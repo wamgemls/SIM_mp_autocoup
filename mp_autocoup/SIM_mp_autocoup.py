@@ -12,7 +12,7 @@ class Simulation:
         
         self.planner = AutocoupPlanner()
             
-        self.init_pose = Pose(None, 15, 12, np.deg2rad(100), 0, 0)
+        self.init_pose = Pose(None, 10, 17, np.deg2rad(80), 0, 0)
         self.ego_pose = self.init_pose
         self.kingpin_pose = Pose(None, 3, 4, np.deg2rad(40), 0, 0)
         self.prekingpin_pose = Pose()
