@@ -350,7 +350,7 @@ class AutocoupPlanner:
         
         while i < len(trajectory):
 
-            sum += self.trapez_integral(abs(self.divide_ZE(1,-trajectory[i-1].vx)),abs(self.divide_ZE(1,-trajectory[i].vx)),trajectory[i-1].s,trajectory[i].s)
+            sum += abs(self.trapez_integral(self.divide_ZE(1,trajectory[i-1].vx),self.divide_ZE(1,trajectory[i].vx),trajectory[i-1].s,trajectory[i].s))
             trajectory[i].t = sum 
         
             i += 1
