@@ -1,5 +1,6 @@
 import numpy as np
 import pyclothoids
+from enum import Enum,auto
 
 class TrajectoryPoint:
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
@@ -23,31 +24,39 @@ class Pose:
 
 class AutocoupPlanner:
 
+    class PlannerMode(Enum):
+        STANDSTILL = auto()
+        COUPLING_PHASE_TILL_PREKINGPIN = auto()
+        COUPLING_PHASE_TILL_KINGPIN = auto()
+
+    init_pose = Pose()
+    ego_pose = Pose()
+    prekingpin_pose = Pose()
+    kingpin_pose = Pose()
+
     ego_on_trajectorylength = 0
     drive_step = 0.2
     
-    def __init__(self, path_res=0.1, path23_res=0.1, vx=-0.41, ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2):
+    def __init__(self, path_res=0.1, path23_res=0.1, vx=-0.41, trajectory_backup = 1,dis_prekingpin_kingpin = 2,
+                    ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2):
+        
+        #trajectory parameter
         self.path_res = path_res
         self.path23_res = path23_res
         self.vx = vx
+        self.trajectory_backup = trajectory_backup
+        self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
+        #planner parameter
         self.ego_delta_bilevel = ego_delta_bilevel
         self.goal_delta_bilevel = goal_delta_bilevel
-
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
 
-        self.dis_prekingpin_kingpin = 2
-        self.linear_backup = 1
-
-        self.init_pose = Pose()
-        self.ego_pose = Pose()
-        self.prekingpin_pose = Pose()
-        self.kingpin_pose = Pose()
+        self.planner_mode = self.PlannerMode
 
         self.trajectory_p1 = []
         self.trajectory_p2 = []
-
         self.trajectory23 = []
 
     def update_pose_reverse(self):
@@ -183,15 +192,15 @@ class AutocoupPlanner:
         preprekingpin_calc_angel = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
         
         #add 1m linear path (controller backup)
-        preprekingpin_calc_x = self.prekingpin_pose.x - (self.linear_backup*np.cos(preprekingpin_calc_angel))
-        preprekingpin_calc_y = self.prekingpin_pose.y - (self.linear_backup*np.sin(preprekingpin_calc_angel))
+        preprekingpin_calc_x = self.prekingpin_pose.x - (self.trajectory_backup*np.cos(preprekingpin_calc_angel))
+        preprekingpin_calc_y = self.prekingpin_pose.y - (self.trajectory_backup*np.sin(preprekingpin_calc_angel))
 
         g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, ego_calc_angle, self.ego_pose.curvature,\
                                                 preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angel, 0)
         
         #self.sample_trajectory_p1_path(g2clothoid_list)
 
-        total_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length + self.linear_backup
+        total_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length + self.trajectory_backup
         npt_tar = round(total_length/self.path_res)
         samp_int = total_length/npt_tar
 
