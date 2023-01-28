@@ -3,6 +3,10 @@ import pyclothoids
 from enum import Enum, auto
 from scipy.integrate import quad
 from scipy.optimize import fsolve
+from VIS_mp_autocoup import AutocoupAnimation
+
+show_animation = 2
+simulate_ego = True
 
 class TrajectoryPoint:
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
@@ -31,7 +35,6 @@ class PlannerMode(Enum):
 
 class AutocoupPlanner:
 
-    init_pose = Pose()
     ego_pose = Pose()
     prekingpin_pose = Pose()
     kingpin_pose = Pose()
@@ -39,7 +42,7 @@ class AutocoupPlanner:
     ego_on_trajectorylength = 0
     drive_step = 0.2
     
-    def __init__(self,  path_res=0.01, path23_res=0.075, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
+    def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
                         ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,
                         dis_prekingpin_kingpin=2):
         
@@ -67,17 +70,14 @@ class AutocoupPlanner:
         self.trajectory23 = []
         self.trajectory_invalid = []
 
-    def update_pose_reverse(self):
-        return self.ego_pose,self.prekingpin_pose
+        self.animation = AutocoupAnimation()
 
-    def update_pose(self, init_pose, ego_pose, kingpin_pose):
-        self.init_pose = init_pose
+    def update_pose(self, ego_pose, kingpin_pose):
         self.ego_pose = ego_pose
         self.kingpin_pose = kingpin_pose
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
     def calc_prekingpin_pose(self,kingpin_pose):
-
         prekingpin_x = kingpin_pose.x + (self.dis_prekingpin_kingpin*np.cos(kingpin_pose.yaw))
         prekingpin_y = kingpin_pose.y + (self.dis_prekingpin_kingpin*np.sin(kingpin_pose.yaw))
         
@@ -91,6 +91,9 @@ class AutocoupPlanner:
             if self.planner_mode is PlannerMode.STANDSTILL:
                 print("standstill")
 
+                if show_animation:
+                    self.visualization()
+
             elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
                 print("phase_1")
                 
@@ -101,7 +104,13 @@ class AutocoupPlanner:
                 self.bilevel_check()
                 if self.feasibility_check():
                     self.resample_trajectory23(self.trajectory_p1)
-                    return self.trajectory23
+                    
+                    if simulate_ego:
+                        self.ego_drive_step()
+
+                    if show_animation:
+                        self.visualization()
+
                 else:
                     print("abort_mission") 
                     #send invalid trajectory
@@ -113,7 +122,12 @@ class AutocoupPlanner:
                     self.sample_trajectory_p2()
 
                 self.resample_trajectory23(self.trajectory_p2)
-                return self.trajectory23
+
+                if show_animation:
+                    self.visualization()
+                
+                if simulate_ego:
+                    self.ego_drive_step()
 
             else:
                 print("invalid_phase")
@@ -121,6 +135,20 @@ class AutocoupPlanner:
         else:
             print("invalid_pose")
             #send invalid trajectory
+
+    def visualization(self):
+
+        self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.trajectory_p1],[tpoint.y for tpoint in self.trajectory_p1],
+                                                [tpoint.x for tpoint in self.trajectory_p2],[tpoint.y for tpoint in self.trajectory_p2],
+                                                [tpoint.x for tpoint in self.trajectory23],[tpoint.y for tpoint in self.trajectory23]
+                                                )
+        
+        
+        if show_animation == 2:
+            self.animation.update_pose_vis(     self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+                                                self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+                                                self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
+                                                )
 
     def ego_drive_step(self):
 
@@ -161,7 +189,7 @@ class AutocoupPlanner:
         dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
 
         if dis_goal_trajgoal > self.goal_delta_bilevel and dis_ego_traj > self.ego_delta_bilevel:
-            print("failed: ego or goal not on trajectory")
+            #print("failed: ego or goal not on trajectory")
             self.sample_trajectory_p1()
             self.sample_trajectory_p2()
 
@@ -313,8 +341,8 @@ class AutocoupPlanner:
                                                             s = self.trajectory23[-1].s,
                                                             x = self.trajectory23[-1].x,
                                                             y = self.trajectory23[-1].y,
-                                                            vx = 0,
-                                                            ax = 0,
+                                                            vx = 0.,
+                                                            ax = 0.,
                                                             yaw = self.trajectory23[-1].yaw,
                                                             curvature= self.trajectory23[-1].curvature                                               
                                                             ))
@@ -355,8 +383,8 @@ class AutocoupPlanner:
                                                             s = self.trajectory23[0].s,
                                                             x = self.trajectory23[0].x,
                                                             y = self.trajectory23[0].y,
-                                                            vx = 0,
-                                                            ax = 0,
+                                                            vx = 0.,
+                                                            ax = 0.,
                                                             yaw = self.trajectory23[0].yaw,
                                                             curvature= self.trajectory23[0].curvature                                                
                                                             ))
