@@ -9,11 +9,10 @@ class Simulation:
         
         self.planner = AutocoupPlanner()
             
-        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),0.2, 0)
+        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),0, 0)
         self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0, 0)
         
         self.planner.update_pose(self.ego_pose,self.kingpin_pose)
-
 
     def simulate(self):
     

@@ -3,6 +3,7 @@ import pyclothoids
 from enum import Enum, auto
 from scipy.integrate import quad
 from scipy.optimize import fsolve
+from scipy.misc import derivative
 from VIS_mp_autocoup import AutocoupAnimation
 
 show_animation = 2
@@ -39,10 +40,10 @@ class AutocoupPlanner:
     prekingpin_pose = Pose()
     kingpin_pose = Pose()
 
-    ego_on_trajectorylength = 0
+    ego_on_traj = 0
     drive_step = 0.2
     
-    def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
+    def __init__(self,  path_res=0.01, path23_res=0.075, vx=-0.41, acc_dec_time=2, history_point_limit=3, trajectory_backup=1,
                         ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,
                         dis_prekingpin_kingpin=2):
         
@@ -89,13 +90,15 @@ class AutocoupPlanner:
             print("pose_validation",end=' -> ')
 
             if self.planner_mode is PlannerMode.STANDSTILL:
-                print("standstill")
+                print("standstill" , end=' -> ')
 
                 if show_animation:
                     self.visualization()
+                
+                print("accomplished")
 
             elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
-                print("phase_1")
+                print("phase_1", end=' -> ')
                 
                 if not self.trajectory_p1 or not self.trajectory_p2:
                     self.sample_trajectory_p1()
@@ -106,14 +109,15 @@ class AutocoupPlanner:
                     self.resample_trajectory23(self.trajectory_p1)
                     
                     if simulate_ego:
-                        self.ego_drive_step()
-
+                        self.ego_drive_step(self.trajectory23)
                     if show_animation:
                         self.visualization()
 
+                    print("accomplished")
                 else:
-                    print("abort_mission") 
                     #send invalid trajectory
+                    print("abort_mission") 
+                    
             
             elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
                 print("phase_2")
@@ -125,58 +129,45 @@ class AutocoupPlanner:
 
                 if show_animation:
                     self.visualization()
-                
                 if simulate_ego:
-                    self.ego_drive_step()
-
+                    self.ego_drive_step(self.trajectory23)
+                
+                print("accomplished")
             else:
-                print("invalid_phase")
                 #send invalid trajectory
+                print("invalid_phase")
         else:
-            print("invalid_pose")
             #send invalid trajectory
+            print("invalid_pose")
 
     def visualization(self):
 
-        self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.trajectory_p1],[tpoint.y for tpoint in self.trajectory_p1],
-                                                [tpoint.x for tpoint in self.trajectory_p2],[tpoint.y for tpoint in self.trajectory_p2],
-                                                [tpoint.x for tpoint in self.trajectory23],[tpoint.y for tpoint in self.trajectory23]
-                                                )
-        
+        self.animation.data_transfer(self.trajectory_p1,self.trajectory_p2,self.trajectory23)
         
         if show_animation == 2:
-            self.animation.update_pose_vis(     self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+            self.animation.update_data_pose(    self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
                                                 self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
                                                 self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
                                                 )
+        
+    def ego_drive_step(self,traj):
 
-    def ego_drive_step(self):
-
-        _, self.ego_on_trajectorylength = self.give_closestprojection_on_trajectory(self.trajectory23)
-
-        self.ego_on_trajectorylength += self.drive_step
+        _, self.ego_on_traj = self.give_closestprojection_on_trajectory(traj)
+        self.ego_on_traj += self.drive_step
 
         i = 1
-        
-        while i < len(self.trajectory23):
-
-            if self.trajectory23[i-1].s <= self.ego_on_trajectorylength < self.trajectory23[i].s:
+        while i < len(traj):
+            if traj[i-1].s <= self.ego_on_traj < traj[i].s:
                 
-                x = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                            self.trajectory23[i-1].x,self.trajectory23[i].x,self.ego_on_trajectorylength)
-
-                y = self.calc_lin_interpol(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                            self.trajectory23[i-1].y,self.trajectory23[i].y,self.ego_on_trajectorylength)
-                
-                yaw =self.calc_lin_interpol_angle(self.trajectory23[i-1].s,self.trajectory23[i].s,\
-                                                    self.trajectory23[i-1].yaw,self.trajectory23[i].yaw,self.ego_on_trajectorylength)
+                x = self.calc_lin_interpol(traj[i-1].s,traj[i].s,traj[i-1].x,traj[i].x,self.ego_on_traj)
+                y = self.calc_lin_interpol(traj[i-1].s,traj[i].s,traj[i-1].y,traj[i].y,self.ego_on_traj)
+                yaw =self.calc_lin_interpol_angle(traj[i-1].s,traj[i].s,traj[i-1].yaw,traj[i].yaw,self.ego_on_traj)
 
                 self.ego_pose.x = x + np.random.normal(0,0.1)
                 self.ego_pose.y = y + np.random.normal(0,0.1)
                 self.ego_pose.yaw = yaw #+ np.random.normal(0,0.01)
                 
-                break
-        
+                break       
             i += 1
 
     def pose_validation(self):
@@ -472,22 +463,22 @@ class AutocoupPlanner:
 
         len_on_traj = 0
 
-        def integrand_acc(t):
+        def func_acc(t):
             return (((vx_pos-ego_vx_pos)/cc_time)*t)+ego_vx_pos
         
-        def integrand_dec(t):
+        def func_dec(t):
             return ((-vx_pos/cc_time)*(t))+vx_pos
 
-        def func_acc(t):
-            integral,err = quad(integrand_acc,0,t)
+        def integral_acc(t):
+            integral,err = quad(func_acc,0,t)
             return len_on_traj-integral
         
-        def func_dec(t):
-            integral,err = quad(integrand_dec,0,t)
+        def integral_dec(t):
+            integral,err = quad(func_dec,0,t)
             return len_on_traj-integral
 
-        vfunc_acc = np.vectorize(func_acc)
-        vfunc_dec = np.vectorize(func_dec)
+        vfunc_acc = np.vectorize(integral_acc)
+        vfunc_dec = np.vectorize(integral_dec)
 
         #solve timestamps for path resolution 
 
@@ -518,7 +509,7 @@ class AutocoupPlanner:
         while i < len(trajectory):
             
             if trajectory[i].t < dt1:
-                trajectory[i].vx = round(-integrand_acc(trajectory[i].t),4)
+                trajectory[i].vx = round(-func_acc(trajectory[i].t),4)
                 i += 1
 
             if dt1 <= trajectory[i].t <= dt1 + dt2:    
@@ -526,15 +517,25 @@ class AutocoupPlanner:
                 i += 1
 
             if dt1 + dt2 < trajectory[i].t:
-                trajectory[i].vx = round(-integrand_dec(trajectory[i].t-dt1-dt2),4)
+                trajectory[i].vx = round(-func_dec(trajectory[i].t-dt1-dt2),4)
                 i += 1
         
         #calculate acceleration values based on velocity derivation
 
         i=1
         while i < len(trajectory):
-            trajectory[i-1].ax = round((trajectory[i].vx-trajectory[i-1].vx)/(trajectory[i].t-trajectory[i-1].t),4)
-            i += 1
+            
+            if trajectory[i].t < dt1:
+                trajectory[i-1].ax = round(derivative(func_acc,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                i += 1
+
+            if dt1 <= trajectory[i].t <= dt1 + dt2:    
+                trajectory[i-1].ax = round(0.0,4)
+                i += 1
+
+            if dt1 + dt2 < trajectory[i].t:
+                trajectory[i-1].ax = round(derivative(func_dec,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                i += 1
         trajectory[-1].ax = 0
 
     def give_closestprojection_on_trajectory(self,trajectory):
