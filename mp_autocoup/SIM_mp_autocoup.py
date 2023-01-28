@@ -1,7 +1,7 @@
 import time
 import numpy as np
 
-from LIB_mp_autocoup import AutocoupPlanner, Pose, TrajectoryPoint
+from LIB_mp_autocoup import  Pose, TrajectoryPoint, PlannerMode, AutocoupPlanner
 from VIS_mp_autocoup import AutocoupAnimation
 
 show_animation = True
@@ -12,9 +12,9 @@ class Simulation:
         
         self.planner = AutocoupPlanner()
             
-        self.init_pose = Pose(None, 10, 17, np.deg2rad(100), 0, 0)
+        self.init_pose = Pose(None, 2, 10, np.deg2rad(190),0.2, 0)
         self.ego_pose = self.init_pose
-        self.kingpin_pose = Pose(None, 3, 4, np.deg2rad(40), 0, 0)
+        self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0, 0)
         self.prekingpin_pose = Pose()
         self.planner.update_pose(self.init_pose,self.ego_pose,self.kingpin_pose)
 
@@ -36,11 +36,19 @@ class Simulation:
             
             self.animation.update_trajectory_vis(   [tpoint.x for tpoint in self.planner.trajectory_p1],[tpoint.y for tpoint in self.planner.trajectory_p1],
                                                     [tpoint.x for tpoint in self.planner.trajectory_p2],[tpoint.y for tpoint in self.planner.trajectory_p2],
-                                                    [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
+                                                    [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23]
+                                                    )
             
+<<<<<<< HEAD
             #self.animation.update_pose_vis( self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
             #                                   self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
             #                                       self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
+=======
+            self.animation.update_pose_vis( self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+                                            self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+                                            self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
+                                            )
+>>>>>>> 01272334b5a3c03cb4cbb723623a4683445c47f1
 
             self.planner.ego_drive_step()
 
