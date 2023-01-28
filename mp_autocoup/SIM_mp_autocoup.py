@@ -38,9 +38,9 @@ class Simulation:
                                                     [tpoint.x for tpoint in self.planner.trajectory_p2],[tpoint.y for tpoint in self.planner.trajectory_p2],
                                                     [tpoint.x for tpoint in self.planner.trajectory23],[tpoint.y for tpoint in self.planner.trajectory23])
             
-            self.animation.update_pose_vis( self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
-                                                self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
-                                                    self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
+            #self.animation.update_pose_vis( self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+            #                                   self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+            #                                       self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
 
             self.planner.ego_drive_step()
 
