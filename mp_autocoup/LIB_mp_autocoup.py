@@ -1,6 +1,6 @@
 import numpy as np
 import pyclothoids
-from enum import Enum,auto
+from enum import Enum, auto
 from scipy.integrate import quad
 from scipy.optimize import fsolve
 
@@ -24,12 +24,12 @@ class Pose:
         self.vx = vx
         self.curvature = curvature
 
-class AutocoupPlanner:
+class PlannerMode(Enum):
+    STANDSTILL = auto()
+    COUPLING_PHASE_TILL_PREKINGPIN = auto()
+    COUPLING_PHASE_TILL_KINGPIN = auto()
 
-    class PlannerMode(Enum):
-        STANDSTILL = auto()
-        COUPLING_PHASE_TILL_PREKINGPIN = auto()
-        COUPLING_PHASE_TILL_KINGPIN = auto()
+class AutocoupPlanner:
 
     init_pose = Pose()
     ego_pose = Pose()
@@ -39,24 +39,28 @@ class AutocoupPlanner:
     ego_on_trajectorylength = 0
     drive_step = 0.2
     
-    def __init__(self, path_res=0.1, path23_res=0.1, vx=-0.41, trajectory_backup = 1,dis_prekingpin_kingpin = 2,history_point_limit = 3,
-                    ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2):
+    def __init__(self,  path_res=0.01, path23_res=0.075, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
+                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,
+                        dis_prekingpin_kingpin=2):
         
         #trajectory parameter
         self.path_res = path_res
         self.path23_res = path23_res
         self.vx = vx
+        self.acc_dec_time = acc_dec_time
         self.history_point_limit = history_point_limit
         self.trajectory_backup = trajectory_backup
-        self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
-
+        
         #planner parameter
         self.ego_delta_bilevel = ego_delta_bilevel
         self.goal_delta_bilevel = goal_delta_bilevel
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
 
-        self.planner_mode = self.PlannerMode
+        #physical parameter
+        self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
+        
+        self.planner_mode = PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN
 
         self.trajectory_p1 = []
         self.trajectory_p2 = []
@@ -84,27 +88,39 @@ class AutocoupPlanner:
         if self.pose_validation():
             print("pose_validation",end=' -> ')
 
-            if self.coupling_phase_2():
-                print("phase_2")
-                
-                self.resample_trajectory23_opti(self.trajectory_p2)
-                return self.trajectory23
+            if self.planner_mode is PlannerMode.STANDSTILL:
+                print("standstill")
 
-            elif self.coupling_phase_1():
+            elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
                 print("phase_1")
                 
+                if not self.trajectory_p1 or not self.trajectory_p2:
+                    self.sample_trajectory_p1()
+                    self.sample_trajectory_p2()
+
                 self.bilevel_check()
-                
                 if self.feasibility_check():
-                    
-                    self.resample_trajectory23_opti(self.trajectory_p1)
+                    self.resample_trajectory23(self.trajectory_p1)
                     return self.trajectory23
                 else:
-                    print("abort_mission")   
+                    print("abort_mission") 
+                    #send invalid trajectory
+            
+            elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
+                print("phase_2")
+
+                if not self.trajectory_p2:
+                    self.sample_trajectory_p2()
+
+                self.resample_trajectory23(self.trajectory_p2)
+                return self.trajectory23
+
             else:
                 print("invalid_phase")
+                #send invalid trajectory
         else:
             print("invalid_pose")
+            #send invalid trajectory
 
     def ego_drive_step(self):
 
@@ -137,32 +153,6 @@ class AutocoupPlanner:
 
     def pose_validation(self):
         return True
-
-    def coupling_phase_1(self):
-
-        dis_ego_kingpin,_ = self.calc_distance_angle_PoseA_PoseB(self.ego_pose,self.kingpin_pose)
-
-        if dis_ego_kingpin > self.dis_prekingpin_kingpin:
-
-            if not self.trajectory_p1 or not self.trajectory_p2:
-                self.sample_trajectory_p1()
-                self.sample_trajectory_p2()
-            return True
-        else:
-            return False
-
-    def coupling_phase_2(self):
-
-        if not self.trajectory_p2:
-            self.sample_trajectory_p2()
-
-        point_on_trajectory,_ = self.give_closestprojection_on_trajectory(self.trajectory_p2)
-        dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
-
-        if dis_ego_traj < 0.3 and theta_ego_traj < 0.1:
-            return True
-        else:
-            return False
 
     def bilevel_check(self):
 
@@ -278,13 +268,14 @@ class AutocoupPlanner:
         self.offset_yaw(self.trajectory_p2)
         self.add_long2trajectory(self.trajectory_p2)
 
-    def resample_trajectory23_opti(self,traj):
+    def resample_trajectory23(self,traj):
 
         self.trajectory23.clear()
 
-        #_,length_on_trajectory = self.give_latprojection_on_trajectory()
+        #calculate length startpoint on main trajectory
         _,zero_len_on_traj = self.give_closestprojection_on_trajectory(traj)
 
+        #calculate time startpint on main trajectory
         j = 1
         while j < len(traj):
 
@@ -293,7 +284,7 @@ class AutocoupPlanner:
 
             j += 1
 
-
+        #resample prediction trajectory
         j = 1
         prediction_cnt = 0
         len_on_traj = zero_len_on_traj + (prediction_cnt * self.path23_res)
@@ -303,7 +294,7 @@ class AutocoupPlanner:
             if traj[j-1].s <= len_on_traj < traj[j].s:
 
                 self.trajectory23.append(TrajectoryPoint(   t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
-                                                            s = len_on_traj,
+                                                            s = prediction_cnt * self.path23_res,
                                                             x = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].x,traj[j].x,len_on_traj),
                                                             y = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].y,traj[j].y,len_on_traj),
                                                             vx = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].vx,traj[j].vx,len_on_traj),
@@ -319,13 +310,13 @@ class AutocoupPlanner:
             elif zero_len_on_traj + (prediction_cnt * self.path23_res) > traj[-1].s:
 
                 self.trajectory23.append(TrajectoryPoint(   t = self.trajectory23[-1].t + abs(self.path23_res/self.vx),
-                                                            s = traj[-1].s,
-                                                            x = traj[-1].x,
-                                                            y = traj[-1].y,
+                                                            s = self.trajectory23[-1].s,
+                                                            x = self.trajectory23[-1].x,
+                                                            y = self.trajectory23[-1].y,
                                                             vx = 0,
                                                             ax = 0,
-                                                            yaw = traj[-1].yaw,
-                                                            curvature= traj[-1].curvature                                                
+                                                            yaw = self.trajectory23[-1].yaw,
+                                                            curvature= self.trajectory23[-1].curvature                                               
                                                             ))
                 
                 j = 0
@@ -335,8 +326,7 @@ class AutocoupPlanner:
             j += 1
         
 
-        #history
-
+        #resample historic trajectory
         j = 1
         history_cnt = 1
         len_on_traj = zero_len_on_traj - (history_cnt * self.path23_res)
@@ -346,7 +336,7 @@ class AutocoupPlanner:
             if traj[j-1].s <= len_on_traj < traj[j].s:
 
                 self.trajectory23.insert(0,TrajectoryPoint( t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
-                                                            s = len_on_traj,
+                                                            s = -history_cnt * self.path23_res,
                                                             x = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].x,traj[j].x,len_on_traj),
                                                             y = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].y,traj[j].y,len_on_traj),
                                                             vx = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].vx,traj[j].vx,len_on_traj),
@@ -362,13 +352,13 @@ class AutocoupPlanner:
             elif zero_len_on_traj - (history_cnt * self.path23_res) < traj[0].s:
 
                 self.trajectory23.insert(0,TrajectoryPoint( t = self.trajectory23[0].t - abs(self.path23_res/self.vx),
-                                                            s = traj[0].s,
-                                                            x = traj[0].x,
-                                                            y = traj[0].y,
+                                                            s = self.trajectory23[0].s,
+                                                            x = self.trajectory23[0].x,
+                                                            y = self.trajectory23[0].y,
                                                             vx = 0,
                                                             ax = 0,
-                                                            yaw = traj[0].yaw,
-                                                            curvature= traj[0].curvature                                                
+                                                            yaw = self.trajectory23[0].yaw,
+                                                            curvature= self.trajectory23[0].curvature                                                
                                                             ))
                 
                 j = 0
@@ -377,7 +367,7 @@ class AutocoupPlanner:
             
             j += 1
 
-    def resample_trajectory23(self,trajectory):
+    def resample_trajectory23_old(self,trajectory):
 
         self.trajectory23.clear()
 
@@ -433,10 +423,12 @@ class AutocoupPlanner:
     
     def add_long2trajectory(self,trajectory):
 
+        #calculate time & path boundaries
+
         vx_pos = abs(self.vx)
         ego_vx_pos = abs(self.ego_pose.vx)
 
-        cc_time = 0.5
+        cc_time = self.acc_dec_time
 
         acc_profile = lambda x: (((vx_pos-ego_vx_pos)/cc_time)*x)+ego_vx_pos
         const_profile = lambda x: (vx_pos*x)
@@ -455,18 +447,11 @@ class AutocoupPlanner:
         def integrand_acc(t):
             return (((vx_pos-ego_vx_pos)/cc_time)*t)+ego_vx_pos
         
-        def integrand_const():
-            return (vx_pos)
-        
         def integrand_dec(t):
             return ((-vx_pos/cc_time)*(t))+vx_pos
 
         def func_acc(t):
             integral,err = quad(integrand_acc,0,t)
-            return len_on_traj-integral
-
-        def func_const(t):
-            integral,err = quad(integrand_const,0,t)
             return len_on_traj-integral
         
         def func_dec(t):
@@ -474,8 +459,9 @@ class AutocoupPlanner:
             return len_on_traj-integral
 
         vfunc_acc = np.vectorize(func_acc)
-        vfunc_const = np.vectorize(func_const)
         vfunc_dec = np.vectorize(func_dec)
+
+        #solve timestamps for path resolution 
 
         i=0
         while i < len(trajectory):
@@ -498,6 +484,8 @@ class AutocoupPlanner:
                 trajectory[i].t = round(dt1+dt2+res,4)
                 i += 1
 
+        #calculate velocity values based on timestamps
+
         i=0
         while i < len(trajectory):
             
@@ -513,86 +501,13 @@ class AutocoupPlanner:
                 trajectory[i].vx = round(-integrand_dec(trajectory[i].t-dt1-dt2),4)
                 i += 1
         
+        #calculate acceleration values based on velocity derivation
+
         i=1
         while i < len(trajectory):
             trajectory[i-1].ax = round((trajectory[i].vx-trajectory[i-1].vx)/(trajectory[i].t-trajectory[i-1].t),4)
             i += 1
         trajectory[-1].ax = 0
-
-        print("test")
-
-
-    def add_long2trajectory_old(self,trajectory):
-
-        acc_dece_time = 1
-        m_acceleration = (self.vx-self.ego_pose.vx)/acc_dece_time
-        m_deceleration = -(self.vx/acc_dece_time)
-
-        ds1 = abs(m_acceleration)*acc_dece_time**2
-        ds3 = abs(m_deceleration)*acc_dece_time**2
-        ds2 = trajectory[-1].s-ds1-ds3
-
-        dt1 = acc_dece_time
-        dt2 = ds2/abs(self.vx)
-        dt3 = acc_dece_time
-        
-
-        length = 0
-        acc_list = []
-
-        while length < ds1:
-
-            acc_list.append(np.sqrt(length/abs(m_acceleration)))
-            length += self.path_res
-
-        dec_list = []
-        length = 0
-
-        while length < ds3:
-
-            dec_list.append(np.sqrt(length/abs(m_deceleration)))
-            length += self.path_res
-
-        dec_list.reverse()
-        dec_list = [abs(x - dec_list[0]) for x in dec_list]
-        
-
-        i=0
-        while i < len(trajectory):
-
-            if trajectory[i].s < ds1:
-                trajectory[i].t = acc_list[i]
-                i += 1
-
-            if ds1 <= trajectory[i].s <= ds1 + ds2:  
-                trajectory[i].t = acc_dece_time + abs((trajectory[i].s-ds1)/self.vx)  
-                i += 1
-
-            if ds1 + ds2 < trajectory[i].s:
-                trajectory[i].t = acc_dece_time + dt2 + dec_list[i-round((ds1+ds2)/self.path_res)]
-                i += 1
-
-        i=0    
-        while i < len(trajectory):
-            
-            if trajectory[i].t < dt1:
-                trajectory[i].vx = m_acceleration*trajectory[i].t
-                i += 1
-
-            if dt1 <= trajectory[i].t <= dt1 + dt2:    
-                trajectory[i].vx = self.vx 
-                i += 1
-
-            if dt1 + dt2 < trajectory[i].t:
-                trajectory[i].vx = m_deceleration*(trajectory[i].t-(dt1+dt2+dt3))
-                i += 1
-
-        i=1
-        while i < len(trajectory):
-            trajectory[i-1].ax = (trajectory[i].vx-trajectory[i-1].vx)/(trajectory[i].t-trajectory[i-1].t)
-            i += 1
-        trajectory[-1].ax = 0
-
 
     def give_closestprojection_on_trajectory(self,trajectory):
 
@@ -694,19 +609,6 @@ class AutocoupPlanner:
         y = det(d, ydiff) / div
 
         return x,y
-
-    @staticmethod
-    def trapez_integral(fa,fb,a,b):
-        return ((b-a)/2) * (fa+fb)
-
-    @staticmethod
-    def divide_ZE(x,y):
-        if y==0:
-            return np.inf
-        elif y==-0:
-            return -np.inf
-        else:
-            return x/y
 
     @staticmethod
     def angle_interval(angle):
