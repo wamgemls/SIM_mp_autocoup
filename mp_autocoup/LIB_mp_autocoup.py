@@ -44,7 +44,7 @@ class AutocoupPlanner:
     drive_step = 0.2
     
     def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
-                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,
+                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2, max_traj_length=15,
                         dis_prekingpin_kingpin=2):
         
         #trajectory parameter
@@ -60,6 +60,7 @@ class AutocoupPlanner:
         self.goal_delta_bilevel = goal_delta_bilevel
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
+        self.max_traj_length = max_traj_length
 
         #physical parameter
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
@@ -191,7 +192,7 @@ class AutocoupPlanner:
             if abs(trajectory_point.curvature) > self.max_curvature:
                 curvature_feasible = False
 
-        if self.trajectory_p1[-1].s > self.min_traj_length and curvature_feasible:
+        if self.min_traj_length <= self.trajectory_p1[-1].s <= self.max_traj_length and curvature_feasible:
             return True
         else:
             return False
@@ -204,12 +205,12 @@ class AutocoupPlanner:
         ego_calc_angle = self.angle_interval(self.ego_pose.yaw+np.pi)
         preprekingpin_calc_angel = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
         
-        #add 1m linear path (controller backup)
+        #add linear path (controller backup)
         preprekingpin_calc_x = self.prekingpin_pose.x - (self.trajectory_backup*np.cos(preprekingpin_calc_angel))
         preprekingpin_calc_y = self.prekingpin_pose.y - (self.trajectory_backup*np.sin(preprekingpin_calc_angel))
 
         g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, ego_calc_angle, self.ego_pose.curvature,\
-                                                preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angel, 0)
+                                                preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angel, 0.0)
 
         clothoid_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length
         total_length =  clothoid_length + self.trajectory_backup
@@ -534,7 +535,7 @@ class AutocoupPlanner:
                 i += 1
 
             if dt1 + dt2 < trajectory[i].t:
-                trajectory[i-1].ax = round(derivative(func_dec,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                trajectory[i-1].ax = -round(derivative(func_dec,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
         trajectory[-1].ax = 0
 
