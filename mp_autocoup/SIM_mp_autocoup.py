@@ -12,10 +12,7 @@ class Simulation:
                                         dis_prekingpin_kingpin=2
                                         )
             
-        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),0.6, 0)
-        self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0, 0)
-        
-        self.planner.update_pose(self.ego_pose,self.kingpin_pose)
+        self.planner.planner_mode = PlannerMode.SIMULATION
 
     def simulate(self):
     
@@ -25,8 +22,6 @@ class Simulation:
 
             print("cycle: ",counter,end=' -> ')
             counter += 1
-
-            #self.planner.update_pose(self.init_pose,self.ego_pose,self.kingpin_pose)
 
             self.planner.cycle()
 
