@@ -4,11 +4,10 @@ from enum import Enum, auto
 from scipy.integrate import quad
 from scipy.optimize import fsolve
 from scipy.misc import derivative
+
 from VIS_mp_autocoup import AutocoupAnimation
 
-show_animation = 2
-simulate_ego = True
-
+show_animation = 1
 class TrajectoryPoint:
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
         self.t = t
@@ -30,6 +29,7 @@ class Pose:
         self.curvature = curvature
 
 class PlannerMode(Enum):
+    SIMULATION = auto()
     STANDSTILL = auto()
     COUPLING_PHASE_TILL_PREKINGPIN = auto()
     COUPLING_PHASE_TILL_KINGPIN = auto()
@@ -64,13 +64,17 @@ class AutocoupPlanner:
 
         #physical parameter
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
-        
-        self.planner_mode = PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN
 
+        #Simulation Pose
+        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),0.0, 0.0)
+        self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0.0, 0.0)
+        self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
+
+        self.planner_mode = PlannerMode.STANDSTILL
+        
         self.trajectory_p1 = []
         self.trajectory_p2 = []
         self.trajectory23 = []
-        self.trajectory_invalid = []
 
         self.animation = AutocoupAnimation()
 
@@ -86,60 +90,72 @@ class AutocoupPlanner:
         return Pose(kingpin_pose.t,prekingpin_x,prekingpin_y,kingpin_pose.yaw,kingpin_pose.vx,kingpin_pose.curvature)
 
     def cycle(self):
-        
-        if self.pose_validation():
-            print("pose_validation",end=' -> ')
 
-            if self.planner_mode is PlannerMode.STANDSTILL:
-                print("standstill" , end=' -> ')
+        if self.planner_mode is PlannerMode.STANDSTILL:
+            print("standstill" , end=' -> ')
 
-                if show_animation:
-                    self.visualization()
-                
-                print("accomplished")
+            self.resample_trajectory23_standstill()
 
-            elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
-                print("phase_1", end=' -> ')
-                
-                if not self.trajectory_p1 or not self.trajectory_p2:
-                    self.sample_trajectory_p1()
-                    self.sample_trajectory_p2()
-
-                self.bilevel_check()
-                if self.feasibility_check():
-                    self.resample_trajectory23(self.trajectory_p1)
-                    
-                    if simulate_ego:
-                        self.ego_drive_step(self.trajectory23)
-                    if show_animation:
-                        self.visualization()
-
-                    print("accomplished")
-                else:
-                    #send invalid trajectory
-                    print("abort_mission") 
-                    
+            if show_animation:
+                self.visualization()
             
-            elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
-                print("phase_2")
+            print("accomplished")
 
-                if not self.trajectory_p2:
-                    self.sample_trajectory_p2()
+        elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
 
-                self.resample_trajectory23(self.trajectory_p2)
+            self.coupling_phase_till_prekingpin()
 
-                if show_animation:
-                    self.visualization()
-                if simulate_ego:
-                    self.ego_drive_step(self.trajectory23)
+            if show_animation:
+                self.visualization()
+
+        elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
+
+            self.coupling_phase_till_kingpin()
+
+            if show_animation:
+                self.visualization()
+
+        elif self.planner_mode is PlannerMode.SIMULATION:
+
+            self.coupling_phase_till_kingpin()
+
+            self.ego_drive_step(self.trajectory23)
+
+            if show_animation:
+                self.visualization()
                 
-                print("accomplished")
-            else:
-                #send invalid trajectory
-                print("invalid_phase")
         else:
             #send invalid trajectory
-            print("invalid_pose")
+            self.resample_trajectory23_standstill()
+            print("invalid_phase")
+
+    def coupling_phase_till_prekingpin(self):
+
+        print("phase_1", end=' -> ')
+
+        if not self.trajectory_p1 or not self.trajectory_p2:
+            self.sample_trajectory_p1()
+            self.sample_trajectory_p2()
+
+        self.bilevel_check()
+        if self.feasibility_check():
+            self.resample_trajectory23(self.trajectory_p1)
+            print("accomplished")
+        else:
+            self.resample_trajectory23_standstill()
+            print("abort_mission")
+
+    def coupling_phase_till_kingpin(self):
+
+        print("phase_2", end=' -> ')
+
+        if not self.trajectory_p1 or not self.trajectory_p2:
+            self.sample_trajectory_p1()
+            self.sample_trajectory_p2()
+
+        self.resample_trajectory23(self.trajectory_p2)
+        print("accomplished")
+
 
     def visualization(self):
 
@@ -387,55 +403,14 @@ class AutocoupPlanner:
             
             j += 1
 
-    def resample_trajectory23_old(self,trajectory):
-
-        self.trajectory23.clear()
-
-        #_,length_on_trajectory = self.give_latprojection_on_trajectory()
-        _,length_on_trajectory = self.give_closestprojection_on_trajectory(trajectory)
-
-        j = 1
-        trajectory23_cnt = 0
-
-        length_offset = length_on_trajectory
-        time_offset = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                trajectory[j-1].t,trajectory[j].t,length_on_trajectory)
-
-        while j < len(trajectory) and trajectory23_cnt < 23:
-            
-            if trajectory[j-1].s <= length_on_trajectory < trajectory[j].s:
-
-                new_traj_point = TrajectoryPoint(s=(self.path23_res*trajectory23_cnt))
-
-                new_traj_point.t = (self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                            trajectory[j-1].t,trajectory[j].t,length_on_trajectory) - time_offset)
-
-                new_traj_point.x = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                            trajectory[j-1].x,trajectory[j].x,length_on_trajectory)
-
-                new_traj_point.y = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                            trajectory[j-1].y,trajectory[j].y,length_on_trajectory)
-                
-                new_traj_point.yaw = self.calc_lin_interpol_angle(trajectory[j-1].s,trajectory[j].s,\
-                                                                    trajectory[j-1].yaw,trajectory[j].yaw,length_on_trajectory)
-
-                new_traj_point.curvature = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                                    trajectory[j-1].curvature,trajectory[j].curvature,length_on_trajectory)
-
-                new_traj_point.vx = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                            trajectory[j-1].vx,trajectory[j].vx,length_on_trajectory)
-                
-                new_traj_point.ax = self.calc_lin_interpol(trajectory[j-1].s,trajectory[j].s,\
-                                                            trajectory[j-1].ax,trajectory[j].ax,length_on_trajectory)
-
-                self.trajectory23.append(new_traj_point)
-
-                length_on_trajectory += self.path23_res
-                trajectory23_cnt += 1
-                j = 0
-                
-            j += 1
-
+    def resample_trajectory23_standstill(self):
+        trajectory_point = TrajectoryPoint(0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0)
+        stillstand_trajectory = []
+        for i in range(23):
+            stillstand_trajectory.append(trajectory_point)
+        
+        self.trajectory23 = stillstand_trajectory
+        
     def offset_yaw(self,trajectory):
 
         for trajectory_point in trajectory:
