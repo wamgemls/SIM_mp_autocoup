@@ -22,9 +22,9 @@ class AutocoupAnimation():
 
         #setup arrows
 
-        self.arrow1a, = self.bird_axis.plot([],[],'-r')
-        self.arrow1b, = self.bird_axis.plot([],[],'-r')
-        self.arrow1c, = self.bird_axis.plot([],[],'-r')
+        self.arrow1a, = self.bird_axis.plot([],[],'black')
+        self.arrow1b, = self.bird_axis.plot([],[],'black')
+        self.arrow1c, = self.bird_axis.plot([],[],'black')
         self.arrow2a, = self.bird_axis.plot([],[], 'black')
         self.arrow2b, = self.bird_axis.plot([],[], 'black')
         self.arrow2c, = self.bird_axis.plot([],[], 'black')
