@@ -28,15 +28,23 @@ class AutocoupAnimation():
         self.graph_figure, self.graph_axis = plt.subplots(4,1,sharex=True)
         self.trajectory_p1_vx, = self.graph_axis[0].plot([],[], '-g')
         self.trajectory_p2_vx, = self.graph_axis[0].plot([],[], '-b')
+        self.graph_axis[0].set_ylabel('vx (m/s)')
+        self.graph_axis[3].set_xlabel('length (m)')
 
         self.trajectory_p1_ax, = self.graph_axis[1].plot([],[], '-g')
         self.trajectory_p2_ax, = self.graph_axis[1].plot([],[], '-b')
+        self.graph_axis[1].set_ylabel('ax (m/s2)')
+        self.graph_axis[3].set_xlabel('length (m)')
 
         self.trajectory_p1_yaw, = self.graph_axis[2].plot([],[], '-g')
         self.trajectory_p2_yaw, = self.graph_axis[2].plot([],[], '-b')
+        self.graph_axis[2].set_ylabel('yaw (rad)')
+        self.graph_axis[3].set_xlabel('length (m)')
 
         self.trajectory_p1_curv, = self.graph_axis[3].plot([],[], '-g')
         self.trajectory_p2_curv, = self.graph_axis[3].plot([],[], '-b')
+        self.graph_axis[3].set_ylabel('curvature (1/m)')
+        self.graph_axis[3].set_xlabel('length (m)')
         
         for i in range(4):
             self.graph_axis[i].grid()

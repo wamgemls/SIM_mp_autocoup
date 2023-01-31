@@ -5,7 +5,7 @@ from scipy.integrate import quad
 from scipy.optimize import fsolve
 from scipy.misc import derivative
 
-from coupling_planner_visualization import AutocoupAnimation
+from .coupling_planner_visualization import AutocoupAnimation
 
 show_animation = 1
 
@@ -63,7 +63,7 @@ class CouplingPlanner:
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),0.0, 0.0)
+        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),-0.5, 0.0)
         self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0.0, 0.0)
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
@@ -472,23 +472,31 @@ class CouplingPlanner:
                 res, = fsolve(vfunc_dec,0.01)
                 trajectory[i].t = round(dt1+dt2+res,4)
                 i += 1
-
+        
+        
+        def func_acc_(t):
+            return (((self.vx-self.ego_pose.vx)/cc_time)*t)+self.ego_pose.vx
+        
+        def func_dec_(t):
+            return ((-self.vx/cc_time)*(t))+self.vx
+        
         #calculate velocity values based on timestamps
-
         i=0
         while i < len(trajectory):
             
             if trajectory[i].t < dt1:
-                trajectory[i].vx = round(-func_acc(trajectory[i].t),4)
+                trajectory[i].vx = round(func_acc_(trajectory[i].t),4)
                 i += 1
 
             if dt1 <= trajectory[i].t <= dt1 + dt2:    
-                trajectory[i].vx = round(-vx_pos,4)
+                trajectory[i].vx = round(self.vx,4)
                 i += 1
 
             if dt1 + dt2 < trajectory[i].t:
-                trajectory[i].vx = round(-func_dec(trajectory[i].t-dt1-dt2),4)
+                trajectory[i].vx = round(func_dec_(trajectory[i].t-dt1-dt2),4)
                 i += 1
+
+
         
         #calculate acceleration values based on velocity derivation
 
@@ -496,7 +504,7 @@ class CouplingPlanner:
         while i < len(trajectory):
             
             if trajectory[i].t < dt1:
-                trajectory[i-1].ax = round(derivative(func_acc,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                trajectory[i-1].ax = round(derivative(func_acc_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
 
             if dt1 <= trajectory[i].t <= dt1 + dt2:    
@@ -504,7 +512,7 @@ class CouplingPlanner:
                 i += 1
 
             if dt1 + dt2 < trajectory[i].t:
-                trajectory[i-1].ax = -round(derivative(func_dec,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                trajectory[i-1].ax = round(derivative(func_dec_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
         trajectory[-1].ax = 0
 
