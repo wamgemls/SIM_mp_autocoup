@@ -5,9 +5,7 @@ from scipy.integrate import quad
 from scipy.optimize import fsolve
 from scipy.misc import derivative
 
-from .coupling_planner_visualization import AutocoupAnimation
-
-show_animation = 1
+from coupling_planner_visualization import AutocoupAnimation
 
 class TrajectoryPoint:
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
@@ -63,7 +61,7 @@ class CouplingPlanner:
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),-0.5, 0.0)
+        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),-1, 0.0)
         self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0.0, 0.0)
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
@@ -92,34 +90,25 @@ class CouplingPlanner:
             print("standstill" , end=' -> ')
 
             self.resample_trajectory23_standstill()
-
-            if show_animation:
-                self.visualization()
+            self.visualization()
             
-            print("accomplished")
+            print("success")
 
         elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
 
             self.coupling_phase_till_prekingpin()
-
-            if show_animation:
-                self.visualization()
+            self.visualization()
 
         elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
 
             self.coupling_phase_till_kingpin()
-
-            if show_animation:
-                self.visualization()
+            self.visualization()
 
         elif self.planner_mode is PlannerMode.SIMULATION:
 
             self.coupling_phase_till_prekingpin()
-
             self.ego_drive_step(self.trajectory23)
-
-            if show_animation:
-                self.visualization()
+            self.visualization()
                 
         else:
             #send invalid trajectory
@@ -137,7 +126,7 @@ class CouplingPlanner:
         self.bilevel_check()
         if self.feasibility_check():
             self.resample_trajectory23(self.trajectory_p1)
-            print("accomplished")
+            print("success")
         else:
             self.resample_trajectory23_standstill()
             print("abort_mission")
@@ -151,18 +140,16 @@ class CouplingPlanner:
             self.sample_trajectory_p2()
 
         self.resample_trajectory23(self.trajectory_p2)
-        print("accomplished")
+        print("success")
 
 
     def visualization(self):
 
         self.animation.data_transfer(self.trajectory_p1,self.trajectory_p2,self.trajectory23)
-        
-        if show_animation == 2:
-            self.animation.update_data_pose(    self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
-                                                self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
-                                                self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
-                                                )
+        self.animation.update_data_pose(    self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+                                            self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+                                            self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
+                                            )
         
     def ego_drive_step(self,traj):
 
@@ -190,7 +177,7 @@ class CouplingPlanner:
         point_on_trajectory,_ = self.give_closestprojection_on_trajectory(self.trajectory_p1)
         dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
 
-        if dis_goal_trajgoal > self.goal_delta_bilevel and dis_ego_traj > self.ego_delta_bilevel:
+        if dis_goal_trajgoal > self.goal_delta_bilevel or dis_ego_traj > self.ego_delta_bilevel:
             #print("failed: ego or goal not on trajectory")
             self.sample_trajectory_p1()
             self.sample_trajectory_p2()
@@ -270,7 +257,7 @@ class CouplingPlanner:
             samp_point += samp_int
 
         self.offset_yaw(self.trajectory_p1)
-        self.add_long2trajectory(self.trajectory_p1)
+        self.add_long2trajectory_p1(self.trajectory_p1)
 
     def sample_trajectory_p2(self):
 
@@ -296,7 +283,7 @@ class CouplingPlanner:
             samp_point += samp_int
 
         self.offset_yaw(self.trajectory_p2)
-        self.add_long2trajectory(self.trajectory_p2)
+        self.add_long2trajectory_p2(self.trajectory_p2)
 
     def resample_trajectory23(self,traj):
 
@@ -410,7 +397,7 @@ class CouplingPlanner:
         for trajectory_point in trajectory:
             trajectory_point.yaw = self.angle_interval(trajectory_point.yaw-np.pi)
     
-    def add_long2trajectory(self,trajectory):
+    def add_long2trajectory_p1(self,trajectory):
 
         #calculate time & path boundaries
 
@@ -496,10 +483,105 @@ class CouplingPlanner:
                 trajectory[i].vx = round(func_dec_(trajectory[i].t-dt1-dt2),4)
                 i += 1
 
-
-        
         #calculate acceleration values based on velocity derivation
+        i=1
+        while i < len(trajectory):
+            
+            if trajectory[i].t < dt1:
+                trajectory[i-1].ax = round(derivative(func_acc_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                i += 1
 
+            if dt1 <= trajectory[i].t <= dt1 + dt2:    
+                trajectory[i-1].ax = round(0.0,4)
+                i += 1
+
+            if dt1 + dt2 < trajectory[i].t:
+                trajectory[i-1].ax = round(derivative(func_dec_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
+                i += 1
+        trajectory[-1].ax = 0
+
+    def add_long2trajectory_p2(self,trajectory):
+
+        #calculate time & path boundaries
+        vx_pos = abs(self.vx)
+        cc_time = self.acc_dec_time
+
+        acc_profile = lambda x: ((vx_pos/cc_time)*x)
+        const_profile = lambda x: (vx_pos*x)
+        dec_profile = lambda x: ((-vx_pos/cc_time)*(x))+vx_pos
+
+        ds1,_ = quad(acc_profile,0,cc_time)
+        ds3,_ = quad(dec_profile,0,cc_time)
+        ds2 = trajectory[-1].s-ds1-ds3
+
+        dt1 = cc_time
+        dt2 = ds2/vx_pos
+        dt3 = cc_time
+
+        len_on_traj = 0
+
+        def func_acc(t):
+            return ((vx_pos/cc_time)*t)
+        
+        def func_dec(t):
+            return ((-vx_pos/cc_time)*(t))+vx_pos
+
+        def integral_acc(t):
+            integral,err = quad(func_acc,0,t)
+            return len_on_traj-integral
+        
+        def integral_dec(t):
+            integral,err = quad(func_dec,0,t)
+            return len_on_traj-integral
+
+        vfunc_acc = np.vectorize(integral_acc)
+        vfunc_dec = np.vectorize(integral_dec)
+
+        #solve timestamps for path resolution 
+        i=0
+        while i < len(trajectory):
+
+            if trajectory[i].s < ds1:
+                len_on_traj = trajectory[i].s
+                res, = fsolve(vfunc_acc,0.01)
+                trajectory[i].t = round(res,4)
+                i += 1
+
+            if ds1 <= trajectory[i].s <= ds1 + ds2:
+                len_on_traj = trajectory[i].s -ds1
+                res = len_on_traj/vx_pos
+                trajectory[i].t = round(dt1+res,4)
+                i += 1
+
+            if ds1 + ds2 < trajectory[i].s:
+                len_on_traj = trajectory[i].s -ds1-ds2
+                res, = fsolve(vfunc_dec,0.01)
+                trajectory[i].t = round(dt1+dt2+res,4)
+                i += 1
+        
+        def func_acc_(t):
+            return (((self.vx)/cc_time)*t)
+        
+        def func_dec_(t):
+            return ((-self.vx/cc_time)*(t))+self.vx
+        
+        #calculate velocity values based on timestamps
+        i=0
+        while i < len(trajectory):
+            
+            if trajectory[i].t < dt1:
+                trajectory[i].vx = round(func_acc_(trajectory[i].t),4)
+                i += 1
+
+            if dt1 <= trajectory[i].t <= dt1 + dt2:    
+                trajectory[i].vx = round(self.vx,4)
+                i += 1
+
+            if dt1 + dt2 < trajectory[i].t:
+                trajectory[i].vx = round(func_dec_(trajectory[i].t-dt1-dt2),4)
+                i += 1
+
+        #calculate acceleration values based on velocity derivation
         i=1
         while i < len(trajectory):
             
@@ -526,7 +608,6 @@ class CouplingPlanner:
                 closest_trajpoint = trajpoint
 
         return closest_trajpoint, closest_trajpoint.s
-
 
     def give_latprojection_on_trajectory(self,trajectory):
 

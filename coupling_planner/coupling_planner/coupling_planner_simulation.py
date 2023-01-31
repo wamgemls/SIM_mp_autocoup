@@ -8,7 +8,7 @@ class Simulation:
     def __init__(self):
         
         self.planner = CouplingPlanner( path_res=0.01, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
-                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,max_traj_length=15,
+                                        ego_delta_bilevel=0.15, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,max_traj_length=15,
                                         dis_prekingpin_kingpin=2
                                         )
             
@@ -24,8 +24,6 @@ class Simulation:
             counter += 1
 
             self.planner.cycle()
-
-            time.sleep(0.5)
    
 def main():
     print("start " + __file__)
