@@ -18,8 +18,7 @@ class KingpinEmulationNode(Node):
         
         self.declare_parameter("timer_period_seconds", 0.2)
 
-        self.kingpin_pose__truckodom_publisher = self.create_publisher(PoseStamped, "/pln/kingpin_emulation_truckodom",10)
-        self.kingpin_pose__truckbase_publisher = self.create_publisher(PoseStamped, "/pln/kingpin_emulation_truckbase",10)
+        self.kingpin_pose_publisher = self.create_publisher(PoseStamped, "/pln/kingpin_emulation",10)
 
         self.timer = self.create_timer(self.get_parameter("timer_period_seconds").get_parameter_value().double_value,self.cycle)
 
@@ -27,13 +26,13 @@ class KingpinEmulationNode(Node):
         self.transform_listener = TransformListener(self.transform_buffer,self)
 
         self.kingpin_pose_global = PoseStamped()
-        self.kingpin_pose_base = PoseStamped()
-        self.kingpin_pose_odom = PoseStamped()
+        self.kingpin_pose_truckbase = PoseStamped()
+        self.kingpin_pose_truckodom = PoseStamped()
 
         self.kingpin_pose_notset = True
         
     def cycle(self):
-        self.get_logger().info("new cycle")
+        self.get_logger().info("cycle")
 
         while self.kingpin_pose_notset:
             print("Waiting for KingPin Pose - Press Enter")
@@ -52,9 +51,7 @@ class KingpinEmulationNode(Node):
 
         try:
             transform = self.transform_buffer.lookup_transform("global", "truck_base", Time())
-            self.get_logger().info("We have this ego in global data: t: {}.{}, x: {}, y: {}".format(
-                                    transform.header.stamp.sec, transform.header.stamp.nanosec,
-                                    transform.transform.translation.x, transform.transform.translation.y))
+            self.get_logger().info("ego@odom: x: {}, y: {}".format(transform.transform.translation.x, transform.transform.translation.y))
             
             self.kingpin_pose_global.header.stamp = now.to_msg()
             self.kingpin_pose_global.header.frame_id = "global"
@@ -73,21 +70,18 @@ class KingpinEmulationNode(Node):
 
     def transform_kingpin_global2truckbase(self):
         try:
-            self.kingpin_pose_base = self.transform_buffer.transform(self.kingpin_pose_global,"truck_base")
+            self.kingpin_pose_truckbase = self.transform_buffer.transform(self.kingpin_pose_global,"truck_base")
         except:
             self.get_logger().info("no tf data - global2base")
             
-
     def transform_kingpin_global2truckodom(self):
         try:
-            self.kingpin_pose_odom = self.transform_buffer.transform(self.kingpin_pose_global,"truck_odom")
+            self.kingpin_pose_truckodom = self.transform_buffer.transform(self.kingpin_pose_global,"truck_odom")
         except:
             self.get_logger().info("no tf data - global2odom")
 
-
     def publish_kingpin_pose_msg(self):
-        self.kingpin_pose__truckbase_publisher.publish(self.kingpin_pose_base)
-        self.kingpin_pose__truckodom_publisher.publish(self.kingpin_pose_odom)
+        self.kingpin_pose_publisher.publish(self.kingpin_pose_truckbase)
 
 
 def main(args=None):

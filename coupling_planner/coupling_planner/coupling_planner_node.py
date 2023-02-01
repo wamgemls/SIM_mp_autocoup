@@ -15,8 +15,6 @@ from pln_interfaces.msg import Ego,TwistSingle,Vector3Single,AutoboxVehicle
 
 from .coupling_planner_lib import CouplingPlanner, PlannerMode, Pose, TrajectoryPoint
 
-Simulation = True
-
 class CouplingPlannerNode(Node):
  
     def __init__(self):
@@ -43,7 +41,7 @@ class CouplingPlannerNode(Node):
         self.transform_listener = TransformListener(self.transform_buffer,self)
 
         #planner
-        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
+        self.planner = CouplingPlanner( path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
                                         ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,max_traj_length=15,
                                         dis_prekingpin_kingpin=2
                                         )
@@ -58,14 +56,10 @@ class CouplingPlannerNode(Node):
         
 
     def cycle(self):
-        time_start = self.get_clock().now().nanoseconds/1e9
-        self.get_logger().info("new cycle")
 
         self.pose2planner()
         self.planner.cycle()
         self.publish_controller_trajectory_msg()
-        time_end = self.get_clock().now().nanoseconds/1e9
-        print(time_end-time_start)
 
     def pose2planner(self):
  
@@ -79,7 +73,7 @@ class CouplingPlannerNode(Node):
 
         if 0 < age_ego <= 1 and 0 < age_kingpin <= 1 and 0 < age_ego_vx <= 1:
 
-            #convert PoseStamped Ego into Planner Pose
+            #convert PoseStamped Ego into PlannerPose
             self.ego_pose.x = self.ego_pose_truckodom.pose.position.x
             self.ego_pose.y = self.ego_pose_truckodom.pose.position.y
             q = Quaternion( self.ego_pose_truckodom.pose.orientation.w,
@@ -93,7 +87,7 @@ class CouplingPlannerNode(Node):
             self.ego_pose.vx = self.ego_msg.velocity.linear.x
             self.ego_pose.curvature = np.tan(self.autoboxvehicle_msg.wheel_angle)/3.6
 
-            #convert PoseStamped KingPin into Planner Pose
+            #convert PoseStamped KingPin into PlannerPose
             self.kingpin_pose.x = self.kingpin_pose_truckodom.pose.position.x
             self.kingpin_pose.y = self.kingpin_pose_truckodom.pose.position.y
             q = Quaternion( self.kingpin_pose_truckodom.pose.orientation.w,
@@ -108,22 +102,17 @@ class CouplingPlannerNode(Node):
             self.planner.update_pose(self.ego_pose,self.kingpin_pose)
 
         else:
+            self.planner.planner_mode = PlannerMode.STANDSTILL
+            self.get_logger().info("ego_pose/ego_vx/kingpin_pose age not valid")
 
-            if Simulation:
-                self.planner.planner_mode = PlannerMode.SIMULATION
-                self.get_logger().info("ego_pose/ego_vx/kingpin_pose not valid - Simulation")
-            else:
-                self.planner.planner_mode = PlannerMode.STANDSTILL
-                self.get_logger().info("ego_pose/ego_vx/kingpin_pose not valid - Standstill")
-
-    def planner_mode_service_callback(self, request,response):
+    def planner_mode_service_callback(self, request, response):
 
         if request.planner_mode is request.COUPLING_PHASE_STANDSTILL:
             self.planner.planner_mode = PlannerMode.STANDSTILL
         elif request.planner_mode is request.COUPLING_PHASE_TILL_PREKINGPIN:
-            self.planner.planner_mode = PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN
+            self.planner.planner_mode = PlannerMode.COUPLING_PHASE_PREKINGPIN
         elif request.planner_mode is request.COUPLING_PHASE_TILL_KINGPIN:
-            self.planner.planner_mode = PlannerMode.COUPLING_PHASE_TILL_KINGPIN
+            self.planner.planner_mode = PlannerMode.COUPLING_PHASE_KINGPIN
         
         response.success = True 
 
@@ -142,8 +131,9 @@ class CouplingPlannerNode(Node):
     def transform_kingpin(self,pose_stamped_msg):
         try:
             self.kingpin_pose_truckodom = self.transform_buffer.transform(pose_stamped_msg,"truck_odom")
+            self.get_logger().info("kingpin@odom: x: {}, y: {}".format(self.kingpin_pose_truckodom.x, self.kingpin_pose_truckodom.y))
         except:
-            self.get_logger().info("no tf data - x2odom")
+            self.get_logger().info("no tf data - goal2odom")
         
     def tranform_ego(self):
 
@@ -151,9 +141,7 @@ class CouplingPlannerNode(Node):
 
         try:
             transform = self.transform_buffer.lookup_transform("truck_odom", "truck_base", Time())
-            self.get_logger().info("We have this ego data: t: {}.{}, x: {}, y: {}".format(
-                                    transform.header.stamp.sec, transform.header.stamp.nanosec,
-                                    transform.transform.translation.x, transform.transform.translation.y))
+            self.get_logger().info("ego@odom: x: {}, y: {}".format(transform.transform.translation.x, transform.transform.translation.y))
             
             self.ego_pose_truckodom.header.stamp = now.to_msg()
             self.ego_pose_truckodom.header.frame_id = "truck_odom"
@@ -168,22 +156,17 @@ class CouplingPlannerNode(Node):
         except LookupException:
             self.get_logger().info("no tf data - odom2base")
 
-
     def publish_controller_trajectory_msg(self):
 
         now = self.get_clock().now()
         msg = ControllerTrajectory()
         msg.header.stamp = now.to_msg()
         msg.header.frame_id = "truck_odom"
-        msg.control_policy = 0
-        msg.coordinate_system = 0
+        msg.control_policy = 10
+        msg.coordinate_system = 10
         msg.indicator_bitmask = 0
 
         if len(self.planner.trajectory23) == 23 and len(msg.points) == 23:
-
-            #convert time to nanoseconds
-            #now = now.nanoseconds / 1e9
-
             for i in range(len(self.planner.trajectory23)):
                 msg.points[i].t = self.planner.trajectory23[i].t
                 msg.points[i].s = self.planner.trajectory23[i].s
@@ -194,8 +177,7 @@ class CouplingPlannerNode(Node):
                 msg.points[i].yaw = self.planner.trajectory23[i].yaw
                 msg.points[i].curvature = self.planner.trajectory23[i].curvature
                 msg.points[i].hitch_angle = 0.0
-                msg.points[i].gear_state = 0
-
+                msg.points[i].gear_state = 30
             self.trajectory_publisher.publish(msg)
         else:
             self.get_logger().info("wrong length of trajectory")

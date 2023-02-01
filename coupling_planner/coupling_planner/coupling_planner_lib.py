@@ -19,8 +19,7 @@ class TrajectoryPoint:
         self.curvature = curvature
 
 class Pose:
-    def __init__(self, t=None,x=None, y=None, yaw=None, vx=None, curvature=None):
-        self.t = t
+    def __init__(self,x=None, y=None, yaw=None, vx=None, curvature=None):
         self.x = x
         self.y = y
         self.yaw = yaw
@@ -30,8 +29,8 @@ class Pose:
 class PlannerMode(Enum):
     SIMULATION = auto()
     STANDSTILL = auto()
-    COUPLING_PHASE_TILL_PREKINGPIN = auto()
-    COUPLING_PHASE_TILL_KINGPIN = auto()
+    COUPLING_PHASE_PREKINGPIN = auto()
+    COUPLING_PHASE_KINGPIN = auto()
 
 class CouplingPlanner:
 
@@ -61,11 +60,11 @@ class CouplingPlanner:
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.ego_pose = Pose(None, 2, 10, np.deg2rad(190),-1, 0.0)
-        self.kingpin_pose = Pose(None, 15, 5, np.deg2rad(140), 0.0, 0.0)
+        self.ego_pose = Pose(0, 10, np.deg2rad(180),0.0, 0.0)
+        self.kingpin_pose = Pose(15, 5, np.deg2rad(160),0.0, 0.0)
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
-        self.planner_mode = PlannerMode.STANDSTILL
+        self.planner_mode = None
         
         self.trajectory_p1 = []
         self.trajectory_p2 = []
@@ -82,42 +81,35 @@ class CouplingPlanner:
         prekingpin_x = kingpin_pose.x + (self.dis_prekingpin_kingpin*np.cos(kingpin_pose.yaw))
         prekingpin_y = kingpin_pose.y + (self.dis_prekingpin_kingpin*np.sin(kingpin_pose.yaw))
         
-        return Pose(kingpin_pose.t,prekingpin_x,prekingpin_y,kingpin_pose.yaw,kingpin_pose.vx,kingpin_pose.curvature)
+        return Pose(prekingpin_x,prekingpin_y,kingpin_pose.yaw,kingpin_pose.vx,kingpin_pose.curvature)
 
     def cycle(self):
+        
+        self.visualization()
 
-        if self.planner_mode is PlannerMode.STANDSTILL:
-            print("standstill" , end=' -> ')
-
-            self.resample_trajectory23_standstill()
-            self.visualization()
-            
-            print("success")
-
-        elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_PREKINGPIN:
-
-            self.coupling_phase_till_prekingpin()
-            self.visualization()
-
-        elif self.planner_mode is PlannerMode.COUPLING_PHASE_TILL_KINGPIN:
-
-            self.coupling_phase_till_kingpin()
-            self.visualization()
-
+        if self.planner_mode is PlannerMode.STANDSTILL: 
+            self.coupling_phase_standstill()
+        elif self.planner_mode is PlannerMode.COUPLING_PHASE_PREKINGPIN:
+            self.coupling_phase_prekingpin()
+        elif self.planner_mode is PlannerMode.COUPLING_PHASE_KINGPIN:
+            self.coupling_phase_kingpin()
         elif self.planner_mode is PlannerMode.SIMULATION:
-
-            self.coupling_phase_till_prekingpin()
-            self.ego_drive_step(self.trajectory23)
-            self.visualization()
-                
+            print("simulation", end=' -> ')
+            self.coupling_phase_prekingpin()
+            self.ego_drive_step(self.trajectory23)       
         else:
-            #send invalid trajectory
-            self.resample_trajectory23_standstill()
             print("invalid_phase")
+            self.resample_trajectory23_standstill()
 
-    def coupling_phase_till_prekingpin(self):
+    def coupling_phase_standstill(self):
+        print("standstill" , end=' -> ')
 
-        print("phase_1", end=' -> ')
+        self.resample_trajectory23_standstill()
+
+        print("success")
+
+    def coupling_phase_prekingpin(self):
+        print("till_prekingpin", end=' -> ')
 
         if not self.trajectory_p1 or not self.trajectory_p2:
             self.sample_trajectory_p1()
@@ -126,30 +118,29 @@ class CouplingPlanner:
         self.bilevel_check()
         if self.feasibility_check():
             self.resample_trajectory23(self.trajectory_p1)
+
             print("success")
         else:
             self.resample_trajectory23_standstill()
+
             print("abort_mission")
 
-    def coupling_phase_till_kingpin(self):
+    def coupling_phase_kingpin(self):
+        print("till_kingpin", end=' -> ')
 
-        print("phase_2", end=' -> ')
-
-        if not self.trajectory_p1 or not self.trajectory_p2:
-            self.sample_trajectory_p1()
+        if not self.trajectory_p2:
             self.sample_trajectory_p2()
 
         self.resample_trajectory23(self.trajectory_p2)
+
         print("success")
 
 
     def visualization(self):
-
-        self.animation.data_transfer(self.trajectory_p1,self.trajectory_p2,self.trajectory23)
-        self.animation.update_data_pose(    self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
-                                            self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
-                                            self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw
-                                            )
+        self.animation.data_transfer(   self.trajectory_p1,self.trajectory_p2,self.trajectory23,\
+                                        self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,\
+                                        self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,\
+                                        self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
         
     def ego_drive_step(self,traj):
 
@@ -246,7 +237,7 @@ class CouplingPlanner:
 
             samp_point += samp_int
 
-        while samp_point < total_length and len(self.trajectory_p1) <= npt_tar:
+        while samp_point <= total_length and len(self.trajectory_p1) <= npt_tar:
 
             self.trajectory_p1.append(TrajectoryPoint(  s=round(samp_point,4),
                                                         x = round(preprekingpin_calc_x + ((samp_point-clothoid_length) * np.cos(preprekingpin_calc_angel)),4),
@@ -342,7 +333,6 @@ class CouplingPlanner:
             
             j += 1
         
-
         #resample historic trajectory
         j = 1
         history_cnt = 1
@@ -639,7 +629,7 @@ class CouplingPlanner:
 
                 length_on_trajectory = trajectory[i-1].s + hyp
                 
-                return Pose(x,y), length_on_trajectory
+                return Pose(x=x,y=y), length_on_trajectory
             
             i += 1
 
