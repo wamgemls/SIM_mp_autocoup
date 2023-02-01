@@ -100,13 +100,11 @@ class AutocoupAnimation():
 
     def calc_limits(self):
 
-        if self.trajectory_p1 and self.trajectory_p2:
+        self.xmin = min(self.ego_x, self.kingpin_x, self.prekingpin_x) -2
+        self.xmax = max(self.ego_x, self.kingpin_x, self.prekingpin_x) +2   
 
-            self.xmin = min(self.trajectory_p1[0].x,self.trajectory_p1[-1].x,self.trajectory_p2[0].x,self.trajectory_p2[-1].x, self.ego_x, self.kingpin_x, self.prekingpin_x) - 1
-            self.xmax = max(self.trajectory_p1[0].x,self.trajectory_p1[-1].x,self.trajectory_p2[0].x,self.trajectory_p2[-1].x, self.ego_x, self.kingpin_x, self.prekingpin_x) + 1
-
-            self.ymin = min(self.trajectory_p1[0].y,self.trajectory_p1[-1].y,self.trajectory_p2[0].y,self.trajectory_p2[-1].y, self.ego_y, self.kingpin_y, self.prekingpin_y) - 1
-            self.ymax = max(self.trajectory_p1[0].y,self.trajectory_p1[-1].y,self.trajectory_p2[0].y,self.trajectory_p2[-1].y, self.ego_y, self.kingpin_y, self.prekingpin_y) + 1
+        self.ymin = min(self.ego_y, self.kingpin_y, self.prekingpin_y) -2
+        self.ymax = max(self.ego_y, self.kingpin_y, self.prekingpin_y) +2
 
     def update_data_bird_fig(self):
         #Update data (with the new _and_ the old points)
@@ -155,7 +153,8 @@ class AutocoupAnimation():
     def update_data_arrow(self):
 
         ego_length = 0.5
-        pin_length = 0.25
+        pin_length = 0.35
+
         ego_Ax = self.ego_x + (ego_length*np.cos(self.ego_yaw))
         ego_Ay = self.ego_y + (ego_length*np.sin(self.ego_yaw))
         ego_Bx = ego_Ax + (ego_length*0.5*np.cos(self.ego_yaw-np.deg2rad(135)))

@@ -60,7 +60,7 @@ class CouplingPlanner:
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.ego_pose = Pose(0, 10, np.deg2rad(180),0.0, 0.0)
+        self.ego_pose = Pose(10, 5, np.deg2rad(180),0.0, 0.0)
         self.kingpin_pose = Pose(15, 5, np.deg2rad(160),0.0, 0.0)
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
@@ -287,7 +287,7 @@ class CouplingPlanner:
         j = 1
         while j < len(traj):
 
-            if traj[j-1].s <= zero_len_on_traj < traj[j].s:
+            if traj[j-1].s <= zero_len_on_traj <= traj[j].s:
                 zero_time_on_traj = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,zero_len_on_traj)
 
             j += 1
@@ -299,7 +299,7 @@ class CouplingPlanner:
         
         while j < len(traj) and prediction_cnt < (23 - self.history_point_limit):
 
-            if traj[j-1].s <= len_on_traj < traj[j].s:
+            if traj[j-1].s <= len_on_traj <= traj[j].s:
 
                 self.trajectory23.append(TrajectoryPoint(   t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
                                                             s = prediction_cnt * self.path23_res,
@@ -340,7 +340,7 @@ class CouplingPlanner:
 
         while j < len(traj) and history_cnt <= self.history_point_limit:
 
-            if traj[j-1].s <= len_on_traj < traj[j].s:
+            if traj[j-1].s <= len_on_traj <= traj[j].s:
 
                 self.trajectory23.insert(0,TrajectoryPoint( t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
                                                             s = -history_cnt * self.path23_res,
@@ -373,7 +373,7 @@ class CouplingPlanner:
                 len_on_traj = zero_len_on_traj + (history_cnt * self.path23_res)
             
             j += 1
-
+    
     def resample_trajectory23_standstill(self):
         trajectory_point = TrajectoryPoint(0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0)
         stillstand_trajectory = []
