@@ -66,7 +66,6 @@ class CouplingPlannerNode(Node):
         self.tranform_ego()
 
         #validate age of ego_pose, kingpin_pose, ego_vx
-
         age_ego = self.get_clock().now().nanoseconds/1e9 - self.ego_pose_truckodom.header.stamp.nanosec/1e9
         age_kingpin = self.get_clock().now().nanoseconds/1e9 - self.kingpin_pose_truckodom.header.stamp.nanosec/1e9
         age_ego_vx = self.get_clock().now().nanoseconds/1e9 - self.ego_msg.header.stamp.nanosec/1e9
