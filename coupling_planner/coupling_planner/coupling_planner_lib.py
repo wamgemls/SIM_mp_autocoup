@@ -327,7 +327,8 @@ class CouplingPlanner:
         t_23 = np.interp(s_23,s_p1,t_p1,-np.inf,np.inf)
         x_23 = np.interp(s_23,s_p1,x_p1)
         y_23 = np.interp(s_23,s_p1,y_p1)
-        yaw_23 = self.angle_interval(np.deg2rad(np.mod(np.interp(s_23, s_p1, np.unwrap(np.rad2deg(yaw_p1), period=360)), 360)))
+        yaw_23 = self.angle_interp(s_23,s_p1,yaw_p1)
+        #yaw_23 = self.angle_interval(np.deg2rad((np.interp(s_23, s_p1, np.unwrap(np.rad2deg(yaw_p1),360))%360)))
         vx_23 = np.interp(s_23,s_p1,vx_p1,0.,0.)
         ax_23 = np.interp(s_23,s_p1,ax_p1,0.,0.)
         curv_23 = np.interp(s_23,s_p1,curv_p1)
@@ -718,6 +719,31 @@ class CouplingPlanner:
         d = np.hypot(dx, dy)
         theta = self.angle_interval(PoseB.yaw-PoseA.yaw)
         return d, theta
+
+    def angle_interp(self,x23, xp, yp):
+
+        y23 = []
+
+        for x3 in x23:
+
+            x1 = 0
+            x2 = 0  
+
+            i=0
+            while i<len(xp):
+                if xp[i] <= x3:
+                    x1 = xp[i]
+                i+=1
+                
+            j=len(xp)-1
+            while j > 0:
+                if xp[j] >= x3:
+                    x2 = xp[j]
+                j-=1
+
+            y23.append(self.calc_lin_interpol_angle(x1,x2,yp[i],yp[j],x3))
+
+        return y23
 
     def calc_lin_interpol_angle(self,x1,x2,y1,y2,x3):
 
