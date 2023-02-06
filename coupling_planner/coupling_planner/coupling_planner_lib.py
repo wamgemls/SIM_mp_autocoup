@@ -327,7 +327,8 @@ class CouplingPlanner:
         t_23 = np.interp(s_23,s_p1,t_p1,-np.inf,np.inf)
         x_23 = np.interp(s_23,s_p1,x_p1)
         y_23 = np.interp(s_23,s_p1,y_p1)
-        yaw_23 = self.angle_interp(s_23,s_p1,yaw_p1)
+        yaw_23 = np.interp(s_23,s_p1,yaw_p1)
+        #yaw_23 = self.angle_interp(s_23,s_p1,yaw_p1)
         #yaw_23 = self.angle_interval(np.deg2rad((np.interp(s_23, s_p1, np.unwrap(np.rad2deg(yaw_p1),360))%360)))
         vx_23 = np.interp(s_23,s_p1,vx_p1,0.,0.)
         ax_23 = np.interp(s_23,s_p1,ax_p1,0.,0.)
@@ -773,10 +774,19 @@ class CouplingPlanner:
         
         #self.calc_lin_interpol(x1,x2,0,propF,x3)
 
-        if propF == propA:
-            interpolated_v = min_v+delta
-        elif propF == propB:
-            interpolated_v = max_v+delta
+        if y1 <= y2:
+
+            if propF == propA:
+                interpolated_v = min_v+delta
+            elif propF == propB:
+                interpolated_v = max_v+delta
+
+        else:
+
+            if propF == propA:
+                interpolated_v = max_v-delta
+            elif propF == propB:
+                interpolated_v = min_v-delta
         
         interpolated_v = np.deg2rad(interpolated_v)
 
