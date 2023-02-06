@@ -2,7 +2,10 @@ import numpy as np
 
 #test np unwrap
 
-yaw_23 = np.unwrap(250,360)
+
+
+test = np.interp([0.1],[0,0.11],[0.,0.17])
+print(test)
 
 def angle_interp(self,x23, xp, yp):
 
@@ -79,5 +82,3 @@ def find_intersection(LineA_x1,LineA_x2,LineA_y1,LineA_y2,LineB_x1,LineB_x2,Line
 @staticmethod
 def angle_interval(angle):
     return (angle + np.pi) % (2*np.pi) - np.pi
-
-print(yaw_23)

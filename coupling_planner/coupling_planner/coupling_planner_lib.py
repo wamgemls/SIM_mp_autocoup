@@ -727,21 +727,30 @@ class CouplingPlanner:
         for x3 in x23:
 
             x1 = 0
-            x2 = 0  
+            x2 = 0
+            x1_elem = None
+            x2_elem = None
 
             i=0
             while i<len(xp):
                 if xp[i] <= x3:
                     x1 = xp[i]
+                    x1_elem = i
                 i+=1
                 
             j=len(xp)-1
             while j > 0:
-                if xp[j] >= x3:
+                if xp[j] > x3:
                     x2 = xp[j]
+                    x2_elem = j
                 j-=1
 
-            y23.append(self.calc_lin_interpol_angle(x1,x2,yp[i],yp[j],x3))
+            if x3 < x1:
+                y23.append(yp[0])
+            elif x3 > x2:
+                y23.append(yp[-1])
+            else:
+                y23.append(self.calc_lin_interpol_angle(x1,x2,yp[x1_elem],yp[x2_elem],x3))
 
         return y23
 
@@ -756,7 +765,13 @@ class CouplingPlanner:
         propA = max_v-min_v
         propB = 360-propA
         propF = min(propA,propB)
-        delta = self.calc_lin_interpol(x1,x2,0,propF,x3)
+
+        xp = [x1,x2]
+        fp = [0.0,propF]
+
+        delta = np.interp(x3,xp,fp)
+        
+        #self.calc_lin_interpol(x1,x2,0,propF,x3)
 
         if propF == propA:
             interpolated_v = min_v+delta
