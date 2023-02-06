@@ -771,18 +771,13 @@ class CouplingPlanner:
         fp = [0.0,propF]
 
         delta = np.interp(x3,xp,fp)
-        
-        #self.calc_lin_interpol(x1,x2,0,propF,x3)
 
         if y1 <= y2:
-
             if propF == propA:
                 interpolated_v = min_v+delta
             elif propF == propB:
                 interpolated_v = max_v+delta
-
         else:
-
             if propF == propA:
                 interpolated_v = max_v-delta
             elif propF == propB:
