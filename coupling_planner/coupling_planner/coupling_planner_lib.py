@@ -5,7 +5,7 @@ from scipy.integrate import quad
 from scipy.optimize import fsolve
 from scipy.misc import derivative
 
-from coupling_planner_visualization import AutocoupAnimation
+from .coupling_planner_visualization import AutocoupAnimation
 
 class TrajectoryPoint:
     def __init__(self,t=None,s=None,x=None,y=None,vx=None,ax=None,yaw=None,curvature=None):
@@ -37,8 +37,8 @@ class CouplingPlanner:
     ego_on_traj = 0
     drive_step = 0.1
     
-    def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
-                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2, max_traj_length=15,
+    def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=3, history_point_limit=3, trajectory_backup=1,
+                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.5, max_curvature=0.26, min_traj_length=2, max_traj_length=15,
                         dis_prekingpin_kingpin=2):
         
         #trajectory parameter
@@ -85,7 +85,6 @@ class CouplingPlanner:
 
     def cycle(self):
         
-        self.visualization()
         if self.planner_mode is PlannerMode.STANDSTILL: 
             self.coupling_phase_standstill()
         elif self.planner_mode is PlannerMode.COUPLING_PHASE_PREKINGPIN:

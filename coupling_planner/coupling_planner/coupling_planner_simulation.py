@@ -7,8 +7,8 @@ class Simulation:
 
     def __init__(self):
         
-        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.01, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
-                                        ego_delta_bilevel=0.3, goal_delta_bilevel=0.15, max_curvature=3, min_traj_length=2,max_traj_length=500,
+        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
+                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=3, min_traj_length=2,max_traj_length=500,
                                         dis_prekingpin_kingpin=2
                                         )
             

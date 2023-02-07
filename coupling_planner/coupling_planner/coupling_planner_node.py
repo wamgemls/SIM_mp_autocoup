@@ -20,7 +20,7 @@ class CouplingPlannerNode(Node):
     def __init__(self):
         super().__init__('pln_coupling_planner')
         
-        self.declare_parameter("timer_period_seconds", 0.5)
+        self.declare_parameter("timer_period_seconds", 0.2)
         
         #services
         self.planner_mode_srv = self.create_service(CouplingPlannerMode,"planner_mode_request",self.planner_mode_service_callback)
@@ -28,7 +28,7 @@ class CouplingPlannerNode(Node):
         #subscriber
         self.ego_vx_subscription = self.create_subscription(Ego,"/Ego",self.ego_vx_subscriber_callback,10)
         self.ego_curvature_subscription = self.create_subscription(AutoboxVehicle,"/AutoboxVehicle",self.ego_curvature_subscriber_callback,10)
-        self.kingpin_pose_subscription = self.create_subscription(PoseStamped,"/pln/kingpin_truckodom",self.kingpin_pose_subscriber_callback,10)
+        self.kingpin_pose_subscription = self.create_subscription(PoseStamped,"/pln/kingpin_emulation",self.kingpin_pose_subscriber_callback,10)
 
         #publisher
         self.trajectory_publisher = self.create_publisher(ControllerTrajectory, "/pln/gpu/trajectory",10)
@@ -41,9 +41,9 @@ class CouplingPlannerNode(Node):
         self.transform_listener = TransformListener(self.transform_buffer,self)
 
         #planner
-        self.planner = CouplingPlanner( path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=0.5, history_point_limit=3, trajectory_backup=1,
-                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.15, max_curvature=0.26, min_traj_length=2,max_traj_length=15,
-                                        dis_prekingpin_kingpin=2
+        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.1, vx=-1, acc_dec_time=3, history_point_limit=3, trajectory_backup=1,
+                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.5, max_curvature=3, min_traj_length=2,max_traj_length=20,
+                                        dis_prekingpin_kingpin=0
                                         )
             
         self.ego_pose = Pose()
@@ -58,6 +58,9 @@ class CouplingPlannerNode(Node):
     def cycle(self):
 
         self.pose2planner()
+
+        self.planner.visualization()
+
         self.planner.cycle()
         self.publish_controller_trajectory_msg()
 
@@ -67,42 +70,47 @@ class CouplingPlannerNode(Node):
 
         #validate age of ego_pose, kingpin_pose, ego_vx
         age_ego = self.get_clock().now().nanoseconds/1e9 - self.ego_pose_truckodom.header.stamp.nanosec/1e9
-        age_kingpin = self.get_clock().now().nanoseconds/1e9 - self.kingpin_pose_truckodom.header.stamp.nanosec/1e9
-        age_ego_vx = self.get_clock().now().nanoseconds/1e9 - self.ego_msg.header.stamp.nanosec/1e9
+        #age_kingpin = self.get_clock().now().nanoseconds/1e9 - self.kingpin_pose_truckodom.header.stamp.nanosec/1e9
+        #age_ego_vx = self.get_clock().now().nanoseconds/1e9 - self.ego_msg.header.stamp.nanosec/1e9
 
-        if 0 < age_ego <= 1 and 0 < age_kingpin <= 1 and 0 < age_ego_vx <= 1:
+        #if 0 < age_ego <= 5: #and 0 < age_kingpin <= 1 and 0 < age_ego_vx <= 1:
 
-            #convert PoseStamped Ego into PlannerPose
-            self.ego_pose.x = self.ego_pose_truckodom.pose.position.x
-            self.ego_pose.y = self.ego_pose_truckodom.pose.position.y
-            q = Quaternion( self.ego_pose_truckodom.pose.orientation.w,
-                            self.ego_pose_truckodom.pose.orientation.x,
-                            self.ego_pose_truckodom.pose.orientation.y,
-                            self.ego_pose_truckodom.pose.orientation.z
-                            )
-            roll, pitch, yaw = q.to_euler()
-            self.ego_pose.yaw = yaw
+        self.planner.planner_mode = PlannerMode.COUPLING_PHASE_PREKINGPIN
+        #convert PoseStamped Ego into PlannerPose
+        self.ego_pose.x = self.ego_pose_truckodom.pose.position.x
+        self.ego_pose.y = self.ego_pose_truckodom.pose.position.y
+        q = Quaternion( self.ego_pose_truckodom.pose.orientation.w,
+                        self.ego_pose_truckodom.pose.orientation.x,
+                        self.ego_pose_truckodom.pose.orientation.y,
+                        self.ego_pose_truckodom.pose.orientation.z
+                        )
+        roll, pitch, yaw = q.to_euler()
+        self.ego_pose.yaw = yaw
+        
+        self.ego_pose.vx = 0.0#self.ego_msg.velocity.linear.x
+        self.ego_pose.curvature = 0.0#np.tan(self.autoboxvehicle_msg.wheel_angle)/3.6
 
-            self.ego_pose.vx = self.ego_msg.velocity.linear.x
-            self.ego_pose.curvature = np.tan(self.autoboxvehicle_msg.wheel_angle)/3.6
+        #convert PoseStamped KingPin into PlannerPose
+        self.kingpin_pose.x = self.kingpin_pose_truckodom.pose.position.x
+        self.kingpin_pose.y = self.kingpin_pose_truckodom.pose.position.y
+        q = Quaternion( self.kingpin_pose_truckodom.pose.orientation.w,
+                        self.kingpin_pose_truckodom.pose.orientation.x,
+                        self.kingpin_pose_truckodom.pose.orientation.y,
+                        self.kingpin_pose_truckodom.pose.orientation.z
+                        )
+        roll, pitch, yaw = q.to_euler()
+        self.kingpin_pose.yaw = yaw
+        
+        self.kingpin_pose.vx = 0.0
+        self.kingpin_pose.curvature = 0.0
+        
+        #update planner pose
+        self.planner.update_pose(self.ego_pose,self.kingpin_pose)
 
-            #convert PoseStamped KingPin into PlannerPose
-            self.kingpin_pose.x = self.kingpin_pose_truckodom.pose.position.x
-            self.kingpin_pose.y = self.kingpin_pose_truckodom.pose.position.y
-            q = Quaternion( self.kingpin_pose_truckodom.pose.orientation.w,
-                            self.kingpin_pose_truckodom.pose.orientation.x,
-                            self.kingpin_pose_truckodom.pose.orientation.y,
-                            self.kingpin_pose_truckodom.pose.orientation.z
-                            )
-            roll, pitch, yaw = q.to_euler()
-            self.kingpin_pose.yaw = yaw
 
-            #update planner pose
-            self.planner.update_pose(self.ego_pose,self.kingpin_pose)
-
-        else:
-            self.planner.planner_mode = PlannerMode.STANDSTILL
-            self.get_logger().info("ego_pose/ego_vx/kingpin_pose age not valid")
+        #else:
+        #    self.planner.planner_mode = PlannerMode.STANDSTILL
+        #    self.get_logger().info("ego_pose/ego_vx/kingpin_pose age not valid")
 
     def planner_mode_service_callback(self, request, response):
 
@@ -124,7 +132,9 @@ class CouplingPlannerNode(Node):
         self.get_logger().info("got new ego_curvature")
 
     def kingpin_pose_subscriber_callback(self, pose_stamped_msg):
-        self.transform_kingpin(pose_stamped_msg)
+        self.kingpin_pose_truckodom = pose_stamped_msg
+        
+        #self.transform_kingpin(pose_stamped_msg)
         self.get_logger().info("got new kingpin_pose")
 
     def transform_kingpin(self,pose_stamped_msg):
@@ -140,7 +150,7 @@ class CouplingPlannerNode(Node):
 
         try:
             transform = self.transform_buffer.lookup_transform("truck_odom", "truck_base", Time())
-            self.get_logger().info("ego@odom: x: {}, y: {}".format(transform.transform.translation.x, transform.transform.translation.y))
+            self.get_logger().info("ego_in_odom: x: {}, y: {}".format(transform.transform.translation.x, transform.transform.translation.y))
             
             self.ego_pose_truckodom.header.stamp = now.to_msg()
             self.ego_pose_truckodom.header.frame_id = "truck_odom"
@@ -153,7 +163,7 @@ class CouplingPlannerNode(Node):
             self.ego_pose_truckodom.pose.orientation.z = transform.transform.rotation.z
 
         except LookupException:
-            self.get_logger().info("no tf data - odom2base")
+            self.get_logger().info("no tf data - ego_in_odom")
 
     def publish_controller_trajectory_msg(self):
 
