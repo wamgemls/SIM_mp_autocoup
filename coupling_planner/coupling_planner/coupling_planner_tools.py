@@ -155,7 +155,7 @@ class CouplingPlanner:
 
                 self.ego_pose.x = x + np.random.normal(0,0.05)
                 self.ego_pose.y = y + np.random.normal(0,0.05)
-                self.ego_pose.yaw = yaw #+ np.random.normal(0,0.01)
+                self.ego_pose.yaw = yaw + np.random.normal(0,0.01)
                 
                 break       
             i += 1
@@ -207,37 +207,37 @@ class CouplingPlanner:
         
         while samp_point <= g2clothoid_list[0].length and len(self.trajectory_p1) <= npt_tar:
 
-            self.trajectory_p1.append(TrajectoryPoint(  s=round(samp_point,4),
-                                                        x=round(g2clothoid_list[0].X(samp_point),4),
-                                                        y=round(g2clothoid_list[0].Y(samp_point),4),
-                                                        yaw=round(g2clothoid_list[0].Theta(samp_point),4),
-                                                        curvature=round((g2clothoid_list[0].KappaStart + (g2clothoid_list[0].dk*samp_point)),4)))
+            self.trajectory_p1.append(TrajectoryPoint(  s = round(samp_point,4),
+                                                        x = round(g2clothoid_list[0].X(samp_point),4),
+                                                        y = round(g2clothoid_list[0].Y(samp_point),4),
+                                                        yaw = round(g2clothoid_list[0].Theta(samp_point),4),
+                                                        curvature = round((g2clothoid_list[0].KappaStart + (g2clothoid_list[0].dk*samp_point)),4)))
 
             samp_point += samp_int
 
         while samp_point-g2clothoid_list[0].length <= g2clothoid_list[1].length and len(self.trajectory_p1) <= npt_tar:
 
-            self.trajectory_p1.append(TrajectoryPoint(  s=round(samp_point,4),
-                                                        x=round(g2clothoid_list[1].X(samp_point - g2clothoid_list[0].length),4),
-                                                        y=round(g2clothoid_list[1].Y(samp_point - g2clothoid_list[0].length),4),
-                                                        yaw=round(g2clothoid_list[1].Theta(samp_point - g2clothoid_list[0].length),4),
-                                                        curvature=round((g2clothoid_list[1].KappaStart + (g2clothoid_list[1].dk*(samp_point-g2clothoid_list[0].length))),4)))
+            self.trajectory_p1.append(TrajectoryPoint(  s = round(samp_point,4),
+                                                        x = round(g2clothoid_list[1].X(samp_point - g2clothoid_list[0].length),4),
+                                                        y = round(g2clothoid_list[1].Y(samp_point - g2clothoid_list[0].length),4),
+                                                        yaw = round(g2clothoid_list[1].Theta(samp_point - g2clothoid_list[0].length),4),
+                                                        curvature = round((g2clothoid_list[1].KappaStart + (g2clothoid_list[1].dk*(samp_point-g2clothoid_list[0].length))),4)))
 
             samp_point += samp_int
 
         while samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length <= g2clothoid_list[2].length and len(self.trajectory_p1) <= npt_tar:
             
-            self.trajectory_p1.append(TrajectoryPoint(  s=round(samp_point,4),
-                                                        x=round(g2clothoid_list[2].X(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                        y=round(g2clothoid_list[2].Y(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                        yaw=round(g2clothoid_list[2].Theta(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
-                                                        curvature=round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length))),4)))
+            self.trajectory_p1.append(TrajectoryPoint(  s = round(samp_point,4),
+                                                        x = round(g2clothoid_list[2].X(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                        y = round(g2clothoid_list[2].Y(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                        yaw = round(g2clothoid_list[2].Theta(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length),4),
+                                                        curvature = round((g2clothoid_list[2].KappaStart + (g2clothoid_list[2].dk*(samp_point-g2clothoid_list[0].length-g2clothoid_list[1].length))),4)))
 
             samp_point += samp_int
 
         while samp_point <= total_length and len(self.trajectory_p1) <= npt_tar:
 
-            self.trajectory_p1.append(TrajectoryPoint(  s=round(samp_point,4),
+            self.trajectory_p1.append(TrajectoryPoint(  s = round(samp_point,4),
                                                         x = round(preprekingpin_calc_x + ((samp_point-clothoid_length) * np.cos(preprekingpin_calc_angel)),4),
                                                         y = round(preprekingpin_calc_y + ((samp_point-clothoid_length) * np.sin(preprekingpin_calc_angel)),4),
                                                         yaw = round(preprekingpin_calc_angel,4),
@@ -264,7 +264,7 @@ class CouplingPlanner:
 
         while samp_point < total_length and len(self.trajectory_p2) <= npt_tar:
 
-            self.trajectory_p2.append(TrajectoryPoint(  s=round(samp_point,4),
+            self.trajectory_p2.append(TrajectoryPoint(  s = round(samp_point,4),
                                                         x = round(self.prekingpin_pose.x + (samp_point * np.cos(traj_yaw)),4),
                                                         y = round(self.prekingpin_pose.y + (samp_point * np.sin(traj_yaw)),4),
                                                         yaw = round(traj_yaw,4),
@@ -291,24 +291,24 @@ class CouplingPlanner:
             j += 1
 
         #store trajectory data in lists
-        t_p1 = []
-        s_p1 = []
-        x_p1 = []
-        y_p1 = []
-        yaw_p1 = []
-        vx_p1 = []
-        ax_p1 = []
-        curv_p1 = []
+        t_raw = []
+        s_raw = []
+        x_raw = []
+        y_raw = []
+        yaw_raw = []
+        vx_raw = []
+        ax_raw = []
+        curv_raw = []
 
         for traj_point in traj:
-            t_p1.append(traj_point.t)
-            s_p1.append(traj_point.s)
-            x_p1.append(traj_point.x)
-            y_p1.append(traj_point.y)
-            yaw_p1.append(traj_point.yaw)
-            vx_p1.append(traj_point.vx)
-            ax_p1.append(traj_point.ax)
-            curv_p1.append(traj_point.curvature)
+            t_raw.append(traj_point.t)
+            s_raw.append(traj_point.s)
+            x_raw.append(traj_point.x)
+            y_raw.append(traj_point.y)
+            yaw_raw.append(traj_point.yaw)
+            vx_raw.append(traj_point.vx)
+            ax_raw.append(traj_point.ax)
+            curv_raw.append(traj_point.curvature)
 
         #resample trajectory23
         t_23 = []
@@ -323,16 +323,15 @@ class CouplingPlanner:
         for i in np.arange(-self.path23_res*self.history_point_limit,(23-self.history_point_limit)*self.path23_res,self.path23_res):
             s_23.append(i+zero_len_on_traj)
 
-        t_23 = np.interp(s_23,s_p1,t_p1,-np.inf,np.inf)
-        x_23 = np.interp(s_23,s_p1,x_p1)
-        y_23 = np.interp(s_23,s_p1,y_p1)
-        yaw_23 = np.interp(s_23,s_p1,yaw_p1)
-        #yaw_23 = self.angle_interp(s_23,s_p1,yaw_p1)
-        #yaw_23 = self.angle_interval(np.deg2rad((np.interp(s_23, s_p1, np.unwrap(np.rad2deg(yaw_p1),360))%360)))
-        vx_23 = np.interp(s_23,s_p1,vx_p1,0.,0.)
-        ax_23 = np.interp(s_23,s_p1,ax_p1,0.,0.)
-        curv_23 = np.interp(s_23,s_p1,curv_p1)
-        s_23 = np.interp(s_23,s_p1,s_p1)
+        t_23 = np.interp(s_23,s_raw,t_raw,-np.inf,np.inf)
+        x_23 = np.interp(s_23,s_raw,x_raw)
+        y_23 = np.interp(s_23,s_raw,y_raw)
+        #yaw_23 = np.interp(s_23,s_p1,yaw_p1)
+        yaw_23 = self.angle_interp(s_23,s_raw,yaw_raw)
+        vx_23 = np.interp(s_23,s_raw,vx_raw,0.,0.)
+        ax_23 = np.interp(s_23,s_raw,ax_raw,0.,0.)
+        curv_23 = np.interp(s_23,s_raw,curv_raw)
+        s_23 = np.interp(s_23,s_raw,s_raw)
 
         for i in range(23):
             s_23[i] = round(s_23[i]-zero_len_on_traj,4)
@@ -768,7 +767,6 @@ class CouplingPlanner:
 
         xp = [x1,x2]
         fp = [0.0,propF]
-
         delta = np.interp(x3,xp,fp)
 
         if y1 <= y2:

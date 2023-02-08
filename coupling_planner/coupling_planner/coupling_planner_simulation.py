@@ -1,7 +1,7 @@
 import time
 import numpy as np
 
-from coupling_planner_lib import  Pose, TrajectoryPoint, PlannerMode, CouplingPlanner
+from coupling_planner_tools import  Pose, TrajectoryPoint, PlannerMode, CouplingPlanner
 
 class Simulation:
 
@@ -12,15 +12,15 @@ class Simulation:
                                         dis_prekingpin_kingpin=2
                                         )
             
-        self.planner.planner_mode = PlannerMode.SIMULATION
-
     def simulate(self):
     
         counter = 0
+        self.planner.planner_mode = PlannerMode.SIMULATION
 
         while True:
             print("cycle: ",counter,end=' -> ')
             counter += 1
+            self.planner.visualization()
             self.planner.cycle()
             time.sleep(0.2)
    

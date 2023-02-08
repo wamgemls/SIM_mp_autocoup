@@ -13,7 +13,9 @@ from pln_interfaces.srv import CouplingPlannerMode
 from pln_interfaces.msg import ControllerTrajectory, ControllerTrajectoryPoint
 from pln_interfaces.msg import Ego,TwistSingle,Vector3Single,AutoboxVehicle
 
-from .coupling_planner_lib import CouplingPlanner, PlannerMode, Pose, TrajectoryPoint
+from .coupling_planner_tools import CouplingPlanner, PlannerMode, Pose, TrajectoryPoint
+
+from kingpin_emulation.kingpin_emulation_tools import do_transform_pose_stamped
 
 class CouplingPlannerNode(Node):
  
@@ -26,7 +28,7 @@ class CouplingPlannerNode(Node):
         self.planner_mode_srv = self.create_service(CouplingPlannerMode,"planner_mode_request",self.planner_mode_service_callback)
 
         #subscriber
-        self.ego_vx_subscription = self.create_subscription(Ego,"/Ego",self.ego_vx_subscriber_callback,10)
+        self.ego_subscription = self.create_subscription(Ego,"/loc/lelo/truck",self.ego_vx_subscriber_callback,10)
         self.ego_curvature_subscription = self.create_subscription(AutoboxVehicle,"/AutoboxVehicle",self.ego_curvature_subscriber_callback,10)
         self.kingpin_pose_subscription = self.create_subscription(PoseStamped,"/pln/kingpin_emulation",self.kingpin_pose_subscriber_callback,10)
 
@@ -34,15 +36,15 @@ class CouplingPlannerNode(Node):
         self.trajectory_publisher = self.create_publisher(ControllerTrajectory, "/pln/gpu/trajectory",10)
 
         #timer
-        self.timer = self.create_timer(self.get_parameter("timer_period_seconds").get_parameter_value().double_value, self.cycle)
-        
+        self.timer_init = self.create_timer(2.5,self.init)
+
         #transformation
         self.transform_buffer = Buffer()
         self.transform_listener = TransformListener(self.transform_buffer,self)
 
         #planner
-        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.1, vx=-1, acc_dec_time=3, history_point_limit=3, trajectory_backup=1,
-                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.5, max_curvature=3, min_traj_length=2,max_traj_length=20,
+        self.planner = CouplingPlanner( path_res=0.01, path23_res=0.2, vx=-0.5, acc_dec_time=2, history_point_limit=3, trajectory_backup=1,
+                                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.5, max_curvature=0.5, min_traj_length=2,max_traj_length=100,
                                         dis_prekingpin_kingpin=0
                                         )
             
@@ -51,22 +53,28 @@ class CouplingPlannerNode(Node):
 
         self.ego_pose_truckodom = PoseStamped()
         self.kingpin_pose_truckodom = PoseStamped()
+
         self.ego_msg = Ego()
         self.autoboxvehicle_msg = AutoboxVehicle()
         
+
+    def init(self):
+        self.get_logger().info("init")
+        self.timer_init.cancel()
+        self.timer = self.create_timer(self.get_parameter("timer_period_seconds").get_parameter_value().double_value,self.cycle)
 
     def cycle(self):
 
         self.pose2planner()
 
         self.planner.visualization()
-
         self.planner.cycle()
+
         self.publish_controller_trajectory_msg()
 
     def pose2planner(self):
  
-        self.tranform_ego()
+        self.give_ego_in_odom()
 
         #validate age of ego_pose, kingpin_pose, ego_vx
         age_ego = self.get_clock().now().nanoseconds/1e9 - self.ego_pose_truckodom.header.stamp.nanosec/1e9
@@ -87,7 +95,7 @@ class CouplingPlannerNode(Node):
         roll, pitch, yaw = q.to_euler()
         self.ego_pose.yaw = yaw
         
-        self.ego_pose.vx = 0.0#self.ego_msg.velocity.linear.x
+        self.ego_pose.vx = self.ego_msg.velocity.linear.x
         self.ego_pose.curvature = 0.0#np.tan(self.autoboxvehicle_msg.wheel_angle)/3.6
 
         #convert PoseStamped KingPin into PlannerPose
@@ -107,7 +115,6 @@ class CouplingPlannerNode(Node):
         #update planner pose
         self.planner.update_pose(self.ego_pose,self.kingpin_pose)
 
-
         #else:
         #    self.planner.planner_mode = PlannerMode.STANDSTILL
         #    self.get_logger().info("ego_pose/ego_vx/kingpin_pose age not valid")
@@ -123,28 +130,20 @@ class CouplingPlannerNode(Node):
         
         response.success = True 
 
-    def ego_vx_subscriber_callback(self,ego_velocity_msg):
-        self.ego_pose.vx = ego_velocity_msg.velocity.linear.x
+    def ego_vx_subscriber_callback(self,ego_msg):
+        self.ego_msg = ego_msg
         self.get_logger().info("got new ego_vx")
     
     def ego_curvature_subscriber_callback(self,autobox_msg):
         self.ego_pose.curvature = np.tan(autobox_msg.wheel_angle)/3.6
         self.get_logger().info("got new ego_curvature")
 
-    def kingpin_pose_subscriber_callback(self, pose_stamped_msg):
-        self.kingpin_pose_truckodom = pose_stamped_msg
-        
+    def kingpin_pose_subscriber_callback(self, kingpin_pose_msg):
+        self.transform_base2odom(kingpin_pose_msg)
         #self.transform_kingpin(pose_stamped_msg)
         self.get_logger().info("got new kingpin_pose")
-
-    def transform_kingpin(self,pose_stamped_msg):
-        try:
-            self.kingpin_pose_truckodom = self.transform_buffer.transform(pose_stamped_msg,"truck_odom")
-            self.get_logger().info("kingpin@odom: x: {}, y: {}".format(self.kingpin_pose_truckodom.x, self.kingpin_pose_truckodom.y))
-        except:
-            self.get_logger().info("no tf data - goal2odom")
         
-    def tranform_ego(self):
+    def give_ego_in_odom(self):
 
         now = self.get_clock().now()
 
@@ -164,6 +163,17 @@ class CouplingPlannerNode(Node):
 
         except LookupException:
             self.get_logger().info("no tf data - ego_in_odom")
+
+    def transform_base2odom(self, kingpin_pose_msg):
+
+        now = self.get_clock().now()
+        try:
+            transform = self.transform_buffer.lookup_transform("truck_odom", "truck_base", Time())
+            #self.get_logger().info("Trafo: global2odom: x: {}, y: {}".format(self.tf_global2truckodom.transform.translation.x, self.tf_global2truckodom.transform.translation.y))
+            self.kingpin_pose_truckodom = do_transform_pose_stamped(kingpin_pose_msg,transform)
+            self.get_logger().info("kingpin@odom: x: {}, y: {}".format(self.kingpin_pose_truckodom.pose.position.x, self.kingpin_pose_truckodom.pose.position.y))
+        except LookupException:
+            self.get_logger().info("no tf data - global2odom")
 
     def publish_controller_trajectory_msg(self):
 
