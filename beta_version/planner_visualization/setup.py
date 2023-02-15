@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'kingpin_emulation'
+package_name = 'planner_visualization'
 
 setup(
     name=package_name,
@@ -14,12 +14,12 @@ setup(
     zip_safe=True,
     maintainer='sperling',
     maintainer_email='max-leon.sperling@man.eu',
-    description='kingpin emulation',
+    description='coupling_autocoup',
     license='MAN TRUCK AND BUS SE',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'kingpin_emulation = kingpin_emulation.kingpin_emulation_node:main'
+            'planner_visualization = planner_visualization.node:main'
         ],
     },
 )

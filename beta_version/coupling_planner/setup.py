@@ -19,7 +19,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'coupling_planner = coupling_planner.coupling_planner_node:main'
+            'coupling_planner = coupling_planner.node:main'
         ],
     },
 )
