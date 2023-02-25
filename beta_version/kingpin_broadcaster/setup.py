@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'kingpin_emulation'
+package_name = 'kingpin_broadcaster'
 
 setup(
     name=package_name,
@@ -19,7 +19,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'kingpin_emulation = kingpin_emulation.node:main'
+            'kingpin_broadcaster = kingpin_broadcaster.node:main'
         ],
     },
 )

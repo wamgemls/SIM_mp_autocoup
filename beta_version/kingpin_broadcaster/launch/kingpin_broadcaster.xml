@@ -1,0 +1,17 @@
+<launch>
+    
+    <node name="pln_kingpin_broadcaster" 
+          pkg="kingpin_broadcaster" 
+          exec="kingpin_broadcaster" 
+          output="screen">
+            
+      <param name="emulation" value="True"/>
+      <param name="timer_period_seconds" value="0.1"/>
+      <param name="noise_kingpin_pose" value="False"/>
+    </node>
+
+    <node pkg="tf2_ros" exec="static_transform_publisher" 
+          args="-0.87856270 0.00654880 0.57275360 0.0109826893 -0.00301524028 3.12591625 truck_base ouster_os0_rear">
+    </node>
+
+</launch>

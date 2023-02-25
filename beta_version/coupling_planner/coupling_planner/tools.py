@@ -33,33 +33,40 @@ class PlannerMode(Enum):
 class CouplingPlanner:
 
     ego_on_traj = 0
-    drive_step = 0.1
+    drive_step = 0.2
     
-    def __init__(self,  path_res=0.1, path23_res=0.1, vx=-0.41, acc_dec_time=3, history_point_limit=3, trajectory_backup=1,
-                        ego_delta_bilevel=0.5, goal_delta_bilevel=0.5, max_curvature=0.26, min_traj_length=2, max_traj_length=15,
-                        dis_prekingpin_kingpin=2):
+    def __init__(self,  path_res=0.1, 
+                        path23_res=0.1, 
+                        vx=-0.41, 
+                        acc_time= 0.5,
+                        dec_time= 0.5, 
+                        history_point_limit=3, 
+                        trajectory_backup=1,
+                        ego_delta_bilevel=0.5, 
+                        goal_delta_bilevel=0.5, 
+                        max_curvature=0.26, 
+                        min_traj_length=2, 
+                        max_traj_length=15,
+                        dis_prekingpin_kingpin=0.525):
         
         #trajectory parameter
         self.path_res = path_res
         self.path23_res = path23_res
         self.vx = vx
-        self.acc_dec_time = acc_dec_time
+        self.acc_time = acc_time
+        self.dec_time = dec_time
         self.history_point_limit = history_point_limit
         self.trajectory_backup = trajectory_backup
-        
-        #planner parameter
         self.ego_delta_bilevel = ego_delta_bilevel
         self.goal_delta_bilevel = goal_delta_bilevel
         self.max_curvature = max_curvature
         self.min_traj_length = min_traj_length
         self.max_traj_length = max_traj_length
-
-        #physical parameter
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.ego_pose = Pose(-10, -4, np.deg2rad(270),0.0, 0.0)
-        self.kingpin_pose = Pose(15.56, 22.356, np.deg2rad(170),0.0, 0.0)
+        self.ego_pose = Pose(10.246, 22.34, np.deg2rad(180),0.0, 0.0)
+        self.kingpin_pose = Pose(7.887, 5.3, np.deg2rad(45),0.0, 0.0)
         self.prekingpin_pose = self.calc_prekingpin_pose(self.kingpin_pose)
 
         self.planner_mode = None
@@ -88,63 +95,43 @@ class CouplingPlanner:
         elif self.planner_mode is PlannerMode.COUPLING_PHASE_KINGPIN:
             self.coupling_phase_kingpin()
         elif self.planner_mode is PlannerMode.SIMULATION:
-            print("simulation", end=' -> ')
             self.coupling_phase_prekingpin()
-            self.ego_drive_step(self.trajectory23)       
-        else:
-            print("invalid_phase")
-            self.resample_trajectory23_standstill()
+            #self.ego_drive_step(self.trajectory_p1)       
 
     def coupling_phase_standstill(self):
-        print("standstill" , end=' -> ')
-
         self.resample_trajectory23_standstill()
 
-        print("success")
-
     def coupling_phase_prekingpin(self):
-        print("till_prekingpin", end=' -> ')
-
-        if not self.trajectory_p1 or not self.trajectory_p2:
-            self.sample_trajectory_p1()
-            self.sample_trajectory_p2()
-
-        self.bilevel_check()
+        #if not self.trajectory_p1 or not self.trajectory_p2:
+        self.sample_trajectory_p1()
+            #self.sample_trajectory_p2()
+        #self.bilevel_check()
         if self.feasibility_check():
             self.resample_trajectory23(self.trajectory_p1)
-
-            print("success")
         else:
             self.resample_trajectory23_standstill()
 
-            print("abort_mission")
-
     def coupling_phase_kingpin(self):
-        print("till_kingpin", end=' -> ')
-
         if not self.trajectory_p2:
             self.sample_trajectory_p2()
-
         self.resample_trajectory23(self.trajectory_p2)
 
-        print("success")
-        
-    def ego_drive_step(self,traj):
+    def ego_drive_step(self,trajectory):
 
-        _, self.ego_on_traj = self.give_closestprojection_on_trajectory(traj)
+        _, self.ego_on_traj = self.give_closestprojection_on_trajectory(trajectory)
         self.ego_on_traj += self.drive_step
 
         i = 1
-        while i < len(traj):
-            if traj[i-1].s <= self.ego_on_traj < traj[i].s:
+        while i < len(trajectory):
+            if trajectory[i-1].s <= self.ego_on_traj < trajectory[i].s:
                 
-                x = self.calc_lin_interpol(traj[i-1].s,traj[i].s,traj[i-1].x,traj[i].x,self.ego_on_traj)
-                y = self.calc_lin_interpol(traj[i-1].s,traj[i].s,traj[i-1].y,traj[i].y,self.ego_on_traj)
-                yaw =self.calc_lin_interpol_angle(traj[i-1].s,traj[i].s,traj[i-1].yaw,traj[i].yaw,self.ego_on_traj)
+                x = self.calc_lin_interpol(trajectory[i-1].s,trajectory[i].s,trajectory[i-1].x,trajectory[i].x,self.ego_on_traj)
+                y = self.calc_lin_interpol(trajectory[i-1].s,trajectory[i].s,trajectory[i-1].y,trajectory[i].y,self.ego_on_traj)
+                yaw = self.calc_lin_interpol_angle(trajectory[i-1].s,trajectory[i].s,trajectory[i-1].yaw,trajectory[i].yaw,self.ego_on_traj)
 
                 self.ego_pose.x = x + np.random.normal(0,0.05)
                 self.ego_pose.y = y + np.random.normal(0,0.05)
-                self.ego_pose.yaw = yaw + np.random.normal(0,0.01)
+                self.ego_pose.yaw = yaw + np.random.normal(0,0.1)
                 
                 break       
             i += 1
@@ -172,20 +159,106 @@ class CouplingPlanner:
         else:
             return False
 
+    def sample_path(self,start_pose,end_pose,straight_length):
+
+        mid_x = end_pose.x - (straight_length*np.cos(self.angle_interval(end_pose.yaw)))
+        mid_y = end_pose.y - (straight_length*np.sin(self.angle_interval(end_pose.yaw)))
+
+        mid_pose = Pose(x=mid_x,y=mid_y,yaw=end_pose.yaw,vx=None,curvature=end_pose.curvature)
+
+        path_0 = self.sample_path_g2(start_pose,mid_pose)
+        path_1 = self.sample_straight(mid_pose.x,mid_pose.y,end_pose.x,end_pose.y)
+
+        for point in path_1:
+            point.s += path_0[-1].s
+
+        path_1.pop(0)
+
+        return path_0 + path_1
+
+    def sample_path_g2(self,start_pose,end_pose):
+
+        g2clothoid_list = pyclothoids.SolveG2(  start_pose.x, start_pose.y, start_pose.yaw, start_pose.curvature,\
+                                                end_pose.x, end_pose.y, end_pose.yaw, end_pose.curvature)
+
+        path_0 = self.sample_clothoid(g2clothoid_list[0])
+        path_1 = self.sample_clothoid(g2clothoid_list[1])
+        path_2 = self.sample_clothoid(g2clothoid_list[2])
+
+        for point in path_1:
+            point.s += g2clothoid_list[0].length
+
+        for point in path_2:
+            point.s += (g2clothoid_list[0].length + g2clothoid_list[1].length)
+
+        path_1.pop(0)
+        path_2.pop(0)
+
+        return path_0 + path_1 + path_2
+
+    def sample_clothoid(self,clothoid):
+
+        n_sample_points = round(clothoid.length/self.path_res)
+        sample_points = np.round(np.linspace(0.0,clothoid.length,n_sample_points),4)
+
+        path = []
+
+        for sample_point in sample_points:
+            path.append(TrajectoryPoint(  
+                s = round(sample_point,4),
+                x = round(clothoid.X(sample_point),4),
+                y = round(clothoid.Y(sample_point),4),
+                yaw = round(clothoid.Theta(sample_point),4),
+                curvature = round((clothoid.KappaStart + (clothoid.dk*sample_point)),4)))
+
+        return path
+
+    def sample_straight(self,x_start,y_start,x_end,y_end):
+
+        dx = x_start - x_end
+        dy = y_start - y_end
+        length = np.hypot(dy, dx)
+        theta = np.arctan2(dy, dx)
+
+        n_sample_points = round(length/self.path_res)
+        sample_points = np.round(np.linspace(0.0,length,n_sample_points),4)
+
+        path = []
+
+        for sample_point in sample_points:
+            path.insert(0,TrajectoryPoint(  
+                s = round(length-sample_point,4),
+                x = round(x_end + (sample_point*np.cos(theta)),4),
+                y = round(y_end + (sample_point*np.sin(theta)),4),
+                yaw = round(theta,4),
+                curvature = round(0.0,4)))
+
+        return path
+
+
+
+
+        
+
+
+
+
+
+
     def sample_trajectory_p1(self):
 
         self.trajectory_p1.clear()
-
+        """
         #rotate angles by 180 (backward driving)
         ego_calc_angle = self.angle_interval(self.ego_pose.yaw+np.pi)
-        preprekingpin_calc_angel = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
+        preprekingpin_calc_angle = self.angle_interval(self.prekingpin_pose.yaw+np.pi)
         
         #add linear path (controller backup)
-        preprekingpin_calc_x = self.prekingpin_pose.x - (self.trajectory_backup*np.cos(preprekingpin_calc_angel))
-        preprekingpin_calc_y = self.prekingpin_pose.y - (self.trajectory_backup*np.sin(preprekingpin_calc_angel))
+        preprekingpin_calc_x = self.prekingpin_pose.x - (self.trajectory_backup*np.cos(preprekingpin_calc_angle))
+        preprekingpin_calc_y = self.prekingpin_pose.y - (self.trajectory_backup*np.sin(preprekingpin_calc_angle))
 
         g2clothoid_list = pyclothoids.SolveG2(self.ego_pose.x, self.ego_pose.y, ego_calc_angle, self.ego_pose.curvature,\
-                                                preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angel, 0.0)
+                                                preprekingpin_calc_x, preprekingpin_calc_y, preprekingpin_calc_angle, 0.0)
 
         clothoid_length = g2clothoid_list[0].length + g2clothoid_list[1].length + g2clothoid_list[2].length
         total_length =  clothoid_length + self.trajectory_backup
@@ -227,14 +300,16 @@ class CouplingPlanner:
         while samp_point <= total_length and len(self.trajectory_p1) <= npt_tar:
 
             self.trajectory_p1.append(TrajectoryPoint(  s = round(samp_point,4),
-                                                        x = round(preprekingpin_calc_x + ((samp_point-clothoid_length) * np.cos(preprekingpin_calc_angel)),4),
-                                                        y = round(preprekingpin_calc_y + ((samp_point-clothoid_length) * np.sin(preprekingpin_calc_angel)),4),
-                                                        yaw = round(preprekingpin_calc_angel,4),
+                                                        x = round(preprekingpin_calc_x + ((samp_point-clothoid_length) * np.cos(preprekingpin_calc_angle)),4),
+                                                        y = round(preprekingpin_calc_y + ((samp_point-clothoid_length) * np.sin(preprekingpin_calc_angle)),4),
+                                                        yaw = round(preprekingpin_calc_angle,4),
                                                         curvature=0))
 
             samp_point += samp_int
+        """
+        self.trajectory_p1 = self.sample_path(self.ego_pose,self.prekingpin_pose,self.trajectory_backup)
 
-        self.offset_yaw(self.trajectory_p1)
+        #self.offset_yaw(self.trajectory_p1)
         self.offset_curvature(self.trajectory_p1)
         self.add_long2trajectory_p1(self.trajectory_p1)
 
@@ -243,7 +318,7 @@ class CouplingPlanner:
         self.trajectory_p2.clear()
 
         dis_prekingpin_kingpin,_ = self.calc_distance_angle_PoseA_PoseB(self.prekingpin_pose,self.kingpin_pose)
-        total_length = dis_prekingpin_kingpin + 2
+        total_length = dis_prekingpin_kingpin + 0.5
         npt_tar = round(total_length/self.path_res)
         samp_int = total_length/npt_tar
 
@@ -257,7 +332,7 @@ class CouplingPlanner:
                                                         x = round(self.prekingpin_pose.x + (samp_point * np.cos(traj_yaw)),4),
                                                         y = round(self.prekingpin_pose.y + (samp_point * np.sin(traj_yaw)),4),
                                                         yaw = round(traj_yaw,4),
-                                                        curvature=0))
+                                                        curvature=0.0))
 
             samp_point += samp_int
 
@@ -338,104 +413,6 @@ class CouplingPlanner:
 
         for i in range(23):
             self.trajectory23.append(TrajectoryPoint(t=t_23[i],s=s_23[i],x=x_23[i],y=y_23[i],vx=vx_23[i],ax=ax_23[i],yaw=yaw_23[i],curvature=curv_23[i]))
-
-    def resample_trajectory23_(self,traj):
-
-        self.trajectory23.clear()
-
-        #calculate length startpoint on main trajectory
-        _,zero_len_on_traj = self.give_closestprojection_on_trajectory(traj)
-
-        #calculate time startpint on main trajectory
-        j = 1
-        while j < len(traj):
-
-            if traj[j-1].s <= zero_len_on_traj <= traj[j].s:
-                zero_time_on_traj = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,zero_len_on_traj)
-
-            j += 1
-
-        #resample prediction trajectory
-        j = 1
-        prediction_cnt = 0
-        len_on_traj = zero_len_on_traj + (prediction_cnt * self.path23_res)
-        
-        while j < len(traj) and prediction_cnt < (23 - self.history_point_limit):
-
-            if traj[j-1].s <= len_on_traj <= traj[j].s:
-
-                self.trajectory23.append(TrajectoryPoint(   t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
-                                                            s = prediction_cnt * self.path23_res,
-                                                            x = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].x,traj[j].x,len_on_traj),
-                                                            y = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].y,traj[j].y,len_on_traj),
-                                                            vx = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].vx,traj[j].vx,len_on_traj),
-                                                            ax = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].ax,traj[j].ax,len_on_traj),
-                                                            yaw = self.calc_lin_interpol_angle(traj[j-1].s,traj[j].s,traj[j-1].yaw,traj[j].yaw,len_on_traj),
-                                                            curvature= self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].curvature,traj[j].curvature,len_on_traj)
-                                                            ))
-
-                j = 0
-                prediction_cnt += 1
-                len_on_traj = zero_len_on_traj + (prediction_cnt * self.path23_res)
-            
-            elif zero_len_on_traj + (prediction_cnt * self.path23_res) > traj[-1].s:
-
-                self.trajectory23.append(TrajectoryPoint(   t = self.trajectory23[-1].t + abs(self.path23_res/self.vx),
-                                                            s = self.trajectory23[-1].s + self.path23_res,
-                                                            x = self.trajectory23[-1].x,
-                                                            y = self.trajectory23[-1].y,
-                                                            vx = 0.,
-                                                            ax = 0.,
-                                                            yaw = self.trajectory23[-1].yaw,
-                                                            curvature= self.trajectory23[-1].curvature                                               
-                                                            ))
-                
-                j = 0
-                prediction_cnt += 1
-                len_on_traj = zero_len_on_traj + (prediction_cnt * self.path23_res)
-            
-            j += 1
-        
-        #resample historic trajectory
-        j = 1
-        history_cnt = 1
-        len_on_traj = zero_len_on_traj - (history_cnt * self.path23_res)
-
-        while j < len(traj) and history_cnt <= self.history_point_limit:
-
-            if traj[j-1].s <= len_on_traj <= traj[j].s:
-
-                self.trajectory23.insert(0,TrajectoryPoint( t = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].t,traj[j].t,len_on_traj) - zero_time_on_traj,
-                                                            s = -history_cnt * self.path23_res,
-                                                            x = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].x,traj[j].x,len_on_traj),
-                                                            y = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].y,traj[j].y,len_on_traj),
-                                                            vx = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].vx,traj[j].vx,len_on_traj),
-                                                            ax = self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].ax,traj[j].ax,len_on_traj),
-                                                            yaw = self.calc_lin_interpol_angle(traj[j-1].s,traj[j].s,traj[j-1].yaw,traj[j].yaw,len_on_traj),
-                                                            curvature= self.calc_lin_interpol(traj[j-1].s,traj[j].s,traj[j-1].curvature,traj[j].curvature,len_on_traj)
-                                                            ))
-
-                j = 0
-                history_cnt += 1
-                len_on_traj = zero_len_on_traj - (history_cnt * self.path23_res)
-
-            elif zero_len_on_traj - (history_cnt * self.path23_res) < traj[0].s:
-
-                self.trajectory23.insert(0,TrajectoryPoint( t = self.trajectory23[0].t - abs(self.path23_res/self.vx),
-                                                            s = self.trajectory23[0].s,
-                                                            x = self.trajectory23[0].x,
-                                                            y = self.trajectory23[0].y,
-                                                            vx = 0.,
-                                                            ax = 0.,
-                                                            yaw = self.trajectory23[0].yaw,
-                                                            curvature= self.trajectory23[0].curvature                                                
-                                                            ))
-                
-                j = 0
-                history_cnt += 1
-                len_on_traj = zero_len_on_traj + (history_cnt * self.path23_res)
-            
-            j += 1
     
     def resample_trajectory23_standstill(self):
         trajectory_point = TrajectoryPoint(0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0)
@@ -458,31 +435,28 @@ class CouplingPlanner:
     def add_long2trajectory_p1(self,trajectory):
 
         #calculate time & path boundaries
-
         vx_pos = abs(self.vx)
         ego_vx_pos = abs(self.ego_pose.vx)
 
-        cc_time = self.acc_dec_time
-
-        acc_profile = lambda x: (((vx_pos-ego_vx_pos)/cc_time)*x)+ego_vx_pos
+        acc_profile = lambda x: (((vx_pos-ego_vx_pos)/self.acc_time)*x)+ego_vx_pos
         const_profile = lambda x: (vx_pos*x)
-        dec_profile = lambda x: ((-vx_pos/cc_time)*(x))+vx_pos
+        dec_profile = lambda x: ((-vx_pos/self.dec_time)*(x))+vx_pos
 
-        ds1,_ = quad(acc_profile,0,cc_time)
-        ds3,_ = quad(dec_profile,0,cc_time)
+        ds1,_ = quad(acc_profile,0,self.acc_time)
+        ds3,_ = quad(dec_profile,0,self.dec_time)
         ds2 = trajectory[-1].s-ds1-ds3
 
-        dt1 = cc_time
+        dt1 = self.acc_time
         dt2 = ds2/vx_pos
-        dt3 = cc_time
+        dt3 = self.dec_time
 
         len_on_traj = 0
 
         def func_acc(t):
-            return (((vx_pos-ego_vx_pos)/cc_time)*t)+ego_vx_pos
+            return (((vx_pos-ego_vx_pos)/self.acc_time)*t)+ego_vx_pos
         
         def func_dec(t):
-            return ((-vx_pos/cc_time)*(t))+vx_pos
+            return ((-vx_pos/self.dec_time)*(t))+vx_pos
 
         def integral_acc(t):
             integral,err = quad(func_acc,0,t)
@@ -518,12 +492,11 @@ class CouplingPlanner:
                 trajectory[i].t = round(dt1+dt2+res,4)
                 i += 1
         
-        
         def func_acc_(t):
-            return (((self.vx-self.ego_pose.vx)/cc_time)*t)+self.ego_pose.vx
+            return (((self.vx-self.ego_pose.vx)/self.acc_time)*t)+self.ego_pose.vx
         
         def func_dec_(t):
-            return ((-self.vx/cc_time)*(t))+self.vx
+            return ((-self.vx/self.dec_time)*(t))+self.vx
         
         #calculate velocity values based on timestamps
         i=0
@@ -540,7 +513,6 @@ class CouplingPlanner:
             if dt1 + dt2 <= trajectory[i].t:
                 trajectory[i].vx = round(func_dec_(trajectory[i].t-dt1-dt2),4)
                 i += 1
-
         trajectory[0].vx += -0.001
 
         #calculate acceleration values based on velocity derivation
@@ -565,27 +537,26 @@ class CouplingPlanner:
 
         #calculate time & path boundaries
         vx_pos = abs(self.vx)
-        cc_time = self.acc_dec_time
 
-        acc_profile = lambda x: ((vx_pos/cc_time)*x)
+        acc_profile = lambda x: ((vx_pos/self.acc_time)*x)
         const_profile = lambda x: (vx_pos*x)
-        dec_profile = lambda x: ((-vx_pos/cc_time)*(x))+vx_pos
+        dec_profile = lambda x: ((-vx_pos/self.dec_time)*(x))+vx_pos
 
-        ds1,_ = quad(acc_profile,0,cc_time)
-        ds3,_ = quad(dec_profile,0,cc_time)
+        ds1,_ = quad(acc_profile,0,self.acc_time)
+        ds3,_ = quad(dec_profile,0,self.dec_time)
         ds2 = trajectory[-1].s-ds1-ds3
 
-        dt1 = cc_time
+        dt1 = self.acc_time
         dt2 = ds2/vx_pos
-        dt3 = cc_time
+        dt3 = self.dec_time
 
         len_on_traj = 0
 
         def func_acc(t):
-            return ((vx_pos/cc_time)*t)
+            return ((vx_pos/self.acc_time)*t)
         
         def func_dec(t):
-            return ((-vx_pos/cc_time)*(t))+vx_pos
+            return ((-vx_pos/self.dec_time)*(t))+vx_pos
 
         def integral_acc(t):
             integral,err = quad(func_acc,0,t)
@@ -621,10 +592,10 @@ class CouplingPlanner:
                 i += 1
         
         def func_acc_(t):
-            return (((self.vx)/cc_time)*t)
+            return (((self.vx)/self.acc_time)*t)
         
         def func_dec_(t):
-            return ((-self.vx/cc_time)*(t))+self.vx
+            return ((-self.vx/self.dec_time)*(t))+self.vx
         
         #calculate velocity values based on timestamps
         i=0
@@ -641,13 +612,14 @@ class CouplingPlanner:
             if dt1 + dt2 <= trajectory[i].t:
                 trajectory[i].vx = round(func_dec_(trajectory[i].t-dt1-dt2),4)
                 i += 1
+        trajectory[0].vx += -0.001
 
         #calculate acceleration values based on velocity derivation
-        i=0
-        while i < len(trajectory)-1:
+        i=1
+        while i < len(trajectory):
             
             if trajectory[i].t <= dt1:
-                trajectory[i].ax = round(derivative(func_acc_,trajectory[i].t,trajectory[i+1].t-trajectory[i].t),4)
+                trajectory[i].ax = round(derivative(func_acc_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
 
             if dt1 < trajectory[i].t <= dt1 + dt2:    
@@ -655,8 +627,9 @@ class CouplingPlanner:
                 i += 1
 
             if dt1 + dt2 <= trajectory[i].t:
-                trajectory[i].ax = round(derivative(func_dec_,trajectory[i].t,trajectory[i+1].t-trajectory[i].t),4)
+                trajectory[i].ax = round(derivative(func_dec_,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
+        trajectory[0].ax = trajectory[1].ax
         trajectory[-1].ax = 0.0
 
     def give_closestprojection_on_trajectory(self,trajectory):
@@ -679,30 +652,24 @@ class CouplingPlanner:
         projection_x2 = self.ego_pose.x + (np.cos(projection_yaw))
         projection_y2 = self.ego_pose.y + (np.sin(projection_yaw))
 
-        length_on_trajectory = 0
-
         i = 1
 
         while i < len(trajectory):
-
+            
             x,y = self.find_intersection(trajectory[i-1].x,trajectory[i].x,trajectory[i-1].y,trajectory[i].y,\
-                                            projection_x1,projection_x2,projection_y1,projection_y2)
+                                        projection_x1,projection_x2,projection_y1,projection_y2)
 
             x = round(x,4)
             y = round(y,4)
 
-            if (trajectory[i-1].x <= x <= trajectory[i].x or trajectory[i-1].x >= x >= trajectory[i].x) and\
-                (trajectory[i-1].y <= y <= trajectory[i].y or trajectory[i-1].y >= y >= trajectory[i].y):
+            if ((trajectory[i-1].x <= x <= trajectory[i].x or trajectory[i-1].x >= x >= trajectory[i].x) and 
+                (trajectory[i-1].y >= y >= trajectory[i].y or trajectory[i-1].y <= y <= trajectory[i].y)):
 
-                dx = abs(x-trajectory[i-1].x)
-                dy = abs(y-trajectory[i-1].y)
-                hyp = np.hypot(dx, dy)
+                return trajectory[i-1], trajectory[i-1].s
 
-                length_on_trajectory = trajectory[i-1].s + hyp
-                
-                return Pose(x=x,y=y), length_on_trajectory
-            
             i += 1
+
+        return self.give_closestprojection_on_trajectory(trajectory)
 
     def calc_distance_angle_PoseA_PoseB(self,PoseA,PoseB):
         dx = PoseA.x - PoseB.x
@@ -793,6 +760,7 @@ class CouplingPlanner:
         div = det(xdiff, ydiff)
         if div == 0:
             raise Exception('lines do not intersect')
+            #return None
 
         d = (det((LineA_x1,LineA_y1),(LineA_x2,LineA_y2)),\
             det((LineB_x1, LineB_y1),(LineB_x2,LineB_y2)))
@@ -805,4 +773,12 @@ class CouplingPlanner:
     @staticmethod
     def angle_interval(angle):
         return (angle + np.pi) % (2*np.pi) - np.pi
+
+    @staticmethod
+    def divide(a,b):
+        if b == 0.0:
+            return 0.0
+        else:
+            return a/b
+
 

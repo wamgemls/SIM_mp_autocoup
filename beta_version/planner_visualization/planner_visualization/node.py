@@ -24,6 +24,7 @@ class CouplingPlannerVisualization(Node):
         #timer
         self.timer = self.create_timer(self.get_parameter("timer_period_seconds").get_parameter_value().double_value,self.cycle)
 
+        self.counter = 0
 
         self.animation = AutocoupAnimation()
         self.coupling_planner_data = CouplingPlannerData()
@@ -40,7 +41,11 @@ class CouplingPlannerVisualization(Node):
         starttime = self.get_clock().now().nanoseconds /1e9
         
         self.read_input_data()
-        self.visualization()
+        
+        #if i % 1 == 0
+
+        self.data_transfer()
+        self.full_draw()
 
         endtime = self.get_clock().now().nanoseconds /1e9
 
@@ -87,11 +92,16 @@ class CouplingPlannerVisualization(Node):
 
         return pose
 
-    def visualization(self):
+    def data_transfer(self):
         self.animation.data_transfer(   self.trajectory_p1, self.trajectory_p2, self.trajectory23,
                                         self.ego_pose.x,self.ego_pose.y,self.ego_pose.yaw,
                                         self.kingpin_pose.x,self.kingpin_pose.y,self.kingpin_pose.yaw,
                                         self.prekingpin_pose.x,self.prekingpin_pose.y,self.prekingpin_pose.yaw)
+
+    def full_draw(self):
+        self.animation.full_draw()
+
+
 
 def main(args=None):
     rclpy.init(args=args)
