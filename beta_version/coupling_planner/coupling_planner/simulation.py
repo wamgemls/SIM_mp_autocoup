@@ -2,7 +2,7 @@ import time
 
 from tools import  Pose, TrajectoryPoint, PlannerMode, CouplingPlanner
 
-from planner_visualization.tools import AutocoupAnimation
+from tools_viz import AutocoupAnimation
 
 class Simulation:
 
