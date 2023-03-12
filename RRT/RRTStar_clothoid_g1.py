@@ -1,11 +1,8 @@
 import math
 import random
-
 import matplotlib.pyplot as plt
 import numpy as np
-
 import pyclothoids as clothoid
-
 
 show_animation = True
 
@@ -100,7 +97,7 @@ class RRT:
 
             new_node = self.clothoid_steer(next(nearest_node_iter), rnd_node, self.expand_dis)
 
-            print("nearest nr: ", i)
+            #print("nearest nr: ", i)
 
             if self.check_if_outside_play_area(new_node, self.play_area) \
                 and self.check_collision(new_node,self.obstacle_list,self.robot_radius):
@@ -110,9 +107,9 @@ class RRT:
 
                     dis,_ = self.calc_distance_and_angle(node, new_node)
 
-                    if dis < 0.5:
+                    if dis < 0.2:
                         node_already_existent = True
-                        print("existiert bereits")
+                        #print("existiert bereits")
 
                 if not node_already_existent:
         
@@ -120,7 +117,7 @@ class RRT:
 
                     for near_node in near_nodes:
 
-                        new_temp_node = self.node_cost(near_node, new_node)
+                        new_temp_node = self.g1_steer(near_node, new_node)
                         
                         if new_temp_node.cost < new_node.cost:
 
@@ -132,7 +129,7 @@ class RRT:
 
                     for near_node in near_nodes:
                         cnear = near_node.cost
-                        new_temp_node = self.node_cost(new_node, near_node)
+                        new_temp_node = self.g1_steer(new_node, near_node)
 
                         if new_temp_node.cost < cnear:
 
@@ -140,7 +137,7 @@ class RRT:
                                 node_tree.remove(near_node)
                                 node_tree.append(new_temp_node)
                                 print("Rewiring")
-                tick_planned = True
+                    tick_planned = True
 
             i += 1
         
@@ -616,8 +613,8 @@ def main():
         expand_dis=2.5,
         obstacle_list=obstacleList,
         play_area=[0,20,0,20],
-        robot_radius=0.2,
-        max_curvature=0.2
+        robot_radius=0.1,
+        max_curvature=0.25
         )
     
     rrt.planning(animation=show_animation)

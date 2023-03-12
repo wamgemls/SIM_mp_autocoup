@@ -80,7 +80,7 @@ def draw_graph(clothoid_listG2=None, clothoid_list_2 = None):
     plt.grid(True)
     plt.pause(0.01)
 
-def plot_arrow(x, y, yaw, length=0.75, width=0.75, fc="g", ec="k"):  # pragma: no cover
+def plot_arrow(x, y, yaw, length=1, width=0.5, fc="k", ec="k"):  # pragma: no cover
     plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),fc=fc, ec=ec, head_width=width, head_length=width)
     plt.plot(x, y)
 
