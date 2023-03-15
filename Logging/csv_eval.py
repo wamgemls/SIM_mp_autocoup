@@ -44,11 +44,6 @@ trajectory23_ax = []
 trajectory23_yaw = []
 trajectory23_curvature = []
 
-timestamps = []
-x_values = []
-
-
-
 # Read in the CSV file and extract the timestamp and x value from each row
 with open(csv_filepath, mode='r') as file:
     reader = csv.reader(file)
@@ -79,8 +74,8 @@ with open(csv_filepath, mode='r') as file:
         yaw_error_prekingpin_l.append(float(yaw_error_prekingpin))
         dis_error_kingpin_l.append(float(dis_error_kingpin))
         yaw_error_kingpin_l.append(float(yaw_error_kingpin))
-
-        if j==100:
+        
+        if j==200:
 
             for i,col in enumerate(row):
                 if col == "|":
@@ -90,21 +85,29 @@ with open(csv_filepath, mode='r') as file:
             trajectory23_h_l = row[trajectory_delimiter[1]:len(row)]
 
             for i in np.arange(0,len(trajectory_h_l)-1,8):
-                trajectory_t.append(i)
-                trajectory_s.append(i+1)
-                trajectory_x.append(i+2)
-                trajectory_y.append(i+3)
-                trajectory_vx.append(i+4)
-                trajectory_ax.append(i+5)
-                trajectory_yaw.append(i+6)
-                trajectory_curvature.append(i+7)
-        
-        
-            
+                trajectory_t.append(float(trajectory_h_l[i]))
+                trajectory_s.append(float(trajectory_h_l[i+1]))
+                trajectory_x.append(float(trajectory_h_l[i+2]))
+                trajectory_y.append(float(trajectory_h_l[i+3]))
+                trajectory_vx.append(float(trajectory_h_l[i+4]))
+                trajectory_ax.append(float(trajectory_h_l[i+5]))
+                trajectory_yaw.append(float(trajectory_h_l[i+6]))
+                trajectory_curvature.append(float(trajectory_h_l[i+7]))
+
+            for i in np.arange(0,len(trajectory23_h_l)-1,8):
+                trajectory23_t.append(float(trajectory_h_l[i]))
+                trajectory23_s.append(float(trajectory_h_l[i+1]))
+                trajectory23_x.append(float(trajectory_h_l[i+2]))
+                trajectory23_y.append(float(trajectory_h_l[i+3]))
+                trajectory23_vx.append(float(trajectory_h_l[i+4]))
+                trajectory23_ax.append(float(trajectory_h_l[i+5]))
+                trajectory23_yaw.append(float(trajectory_h_l[i+6]))
+                trajectory23_curvature.append(float(trajectory_h_l[i+7]))
+
 
 bird_figure, bird_axis = plt.subplots()
 bird_axis.grid()
-bird_axis.plot(trajectory_s, trajectory_vx)
+bird_axis.plot(trajectory23_s, trajectory23_ax)
 #bird_axis.set_aspect('equal','datalim')
 
 plt.show()
