@@ -4,6 +4,9 @@ import numpy as np
 
 plt.ion()
 
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif')
+
 class AutocoupAnimation():
 
     def __init__(self):
@@ -13,7 +16,7 @@ class AutocoupAnimation():
         self.ymin = -5
         self.ymax = 5
 
-        self.trajectory_p1 = []
+        self.trajectory = []
         self.trajectory_p2 = []
         self.trajectory23 = []
 
@@ -31,13 +34,12 @@ class AutocoupAnimation():
         self.setup_graph_fig()
         self.setup_graph_fig23()
 
-    def data_transfer(self, trajectory_p1, trajectory_p2, trajectory23,
+    def data_transfer(self, trajectory, trajectory23,
                             ego_x,ego_y,ego_yaw,
                             kingpin_x,kingpin_y,kingpin_yaw,
                             prekingpin_x,prekingpin_y,prekingpin_yaw):
 
-        self.trajectory_p1 = trajectory_p1
-        self.trajectory_p2 = trajectory_p2
+        self.trajectory = trajectory
         self.trajectory23 = trajectory23
 
         self.ego_x = ego_x
@@ -67,8 +69,8 @@ class AutocoupAnimation():
         p2_ymin = None
         p2_ymax = None
 
-        if self.trajectory_p1:
-            for traj_point in self.trajectory_p1:
+        if self.trajectory:
+            for traj_point in self.trajectory:
                 if not p1_xmax or p1_xmax < traj_point.x:
                     p1_xmax = traj_point.x
                 if not p1_xmin or p1_xmin > traj_point.x:
@@ -82,22 +84,6 @@ class AutocoupAnimation():
             self.xmax = max(self.xmax,p1_xmax)
             self.ymin = min(self.ymin,p1_ymin)
             self.ymax = max(self.ymax,p1_ymax)
-
-        if self.trajectory_p2:
-            for traj_point in self.trajectory_p2:
-                if not p2_xmax or p2_xmax < traj_point.x:
-                    p2_xmax = traj_point.x
-                if not p2_xmin or p2_xmin > traj_point.x:
-                    p2_xmin = traj_point.x
-                if not p2_ymax or p2_ymax < traj_point.y:
-                    p2_ymax = traj_point.y
-                if not p2_ymin or p2_ymin > traj_point.y:
-                    p2_ymin = traj_point.y
-
-            self.xmin = min(self.xmin,p2_xmin)
-            self.xmax = max(self.xmax,p2_xmax)
-            self.ymin = min(self.ymin,p2_ymin)
-            self.ymax = max(self.ymax,p2_ymax)
 
         self.xmin -= 2
         self.xmax += 2
@@ -119,8 +105,7 @@ class AutocoupAnimation():
         self.prekingpin_arrow_poly, = self.bird_axis.fill([],[],color="#525252",zorder=5.0)
         self.kingpin_arrow_poly, = self.bird_axis.fill([],[],color="#858585",zorder=5.0)
         
-        self.trajectory_p1_axis, = self.bird_axis.plot([],[], '-g',zorder=3.0)
-        self.trajectory_p2_axis, = self.bird_axis.plot([],[], '-b',zorder=3.0)
+        self.trajectory_axis, = self.bird_axis.plot([],[], '-g',zorder=3.0)
         self.trajectory23_axis, = self.bird_axis.plot([],[],'-r',zorder=3.1)
     
     def setup_graph_fig(self):
@@ -128,24 +113,20 @@ class AutocoupAnimation():
         #Set up long figure
         self.graph_figure, self.graph_axis = plt.subplots(4,1,sharex=True)
         self.trajectory_p1_vx, = self.graph_axis[0].plot([],[], '-g')
-        self.trajectory_p2_vx, = self.graph_axis[0].plot([],[], '-b')
-        self.graph_axis[0].set_ylabel('vx (m/s)')
-        self.graph_axis[3].set_xlabel('length (m)')
+        self.graph_axis[0].set_ylabel(r'$v_x$ $(\frac{m}{s})$',fontsize=12)
+        self.graph_axis[3].set_xlabel(r'length $(m)$',fontsize=12)
 
         self.trajectory_p1_ax, = self.graph_axis[1].plot([],[], '-g')
-        self.trajectory_p2_ax, = self.graph_axis[1].plot([],[], '-b')
-        self.graph_axis[1].set_ylabel('ax (m/s2)')
-        self.graph_axis[3].set_xlabel('length (m)')
+        self.graph_axis[1].set_ylabel(r'$a_x$ $(\frac{m}{s^2})$',fontsize=12)
+        self.graph_axis[3].set_xlabel(r'length $(m)$',fontsize=12)
 
         self.trajectory_p1_yaw, = self.graph_axis[2].plot([],[], '-g')
-        self.trajectory_p2_yaw, = self.graph_axis[2].plot([],[], '-b')
-        self.graph_axis[2].set_ylabel('yaw (rad)')
-        self.graph_axis[3].set_xlabel('length (m)')
+        self.graph_axis[2].set_ylabel(r'$\theta$ $(rad)$',fontsize=12)
+        self.graph_axis[3].set_xlabel(r'length $(m)$',fontsize=12)
 
         self.trajectory_p1_curv, = self.graph_axis[3].plot([],[], '-g')
-        self.trajectory_p2_curv, = self.graph_axis[3].plot([],[], '-b')
-        self.graph_axis[3].set_ylabel('curvature (1/m)')
-        self.graph_axis[3].set_xlabel('length (m)')
+        self.graph_axis[3].set_ylabel(r'$\kappa$ $(\frac{1}{m})$',fontsize=12)
+        self.graph_axis[3].set_xlabel(r'length $(m)$',fontsize=12)
         
         for i in range(4):
             self.graph_axis[i].grid()
@@ -172,12 +153,9 @@ class AutocoupAnimation():
 
     def full_update_data_bird_fig(self):
         #Update data (with the new _and_ the old points)
-        self.trajectory_p1_axis.set_xdata([tpoint.x for tpoint in self.trajectory_p1])
-        self.trajectory_p1_axis.set_ydata([tpoint.y for tpoint in self.trajectory_p1])
-
-        self.trajectory_p2_axis.set_xdata([tpoint.x for tpoint in self.trajectory_p2])
-        self.trajectory_p2_axis.set_ydata([tpoint.y for tpoint in self.trajectory_p2])
-
+        self.trajectory_axis.set_xdata([tpoint.x for tpoint in self.trajectory])
+        self.trajectory_axis.set_ydata([tpoint.y for tpoint in self.trajectory])
+        
         self.trajectory23_axis.set_xdata([tpoint.x for tpoint in self.trajectory23])
         self.trajectory23_axis.set_ydata([tpoint.y for tpoint in self.trajectory23])
 
@@ -187,25 +165,17 @@ class AutocoupAnimation():
 
     def full_update_data_graph_fig(self):
         #Update data (with the new _and_ the old points)
-        self.trajectory_p1_vx.set_xdata([tpoint.s for tpoint in self.trajectory_p1])
-        self.trajectory_p1_vx.set_ydata([tpoint.vx for tpoint in self.trajectory_p1])
-        self.trajectory_p2_vx.set_xdata([tpoint.s + self.trajectory_p1[-1].s for tpoint in self.trajectory_p2])
-        self.trajectory_p2_vx.set_ydata([tpoint.vx for tpoint in self.trajectory_p2])
+        self.trajectory_p1_vx.set_xdata([tpoint.s for tpoint in self.trajectory])
+        self.trajectory_p1_vx.set_ydata([tpoint.vx for tpoint in self.trajectory])
 
-        self.trajectory_p1_ax.set_xdata([tpoint.s for tpoint in self.trajectory_p1])
-        self.trajectory_p1_ax.set_ydata([tpoint.ax for tpoint in self.trajectory_p1])
-        self.trajectory_p2_ax.set_xdata([tpoint.s + self.trajectory_p1[-1].s for tpoint in self.trajectory_p2])
-        self.trajectory_p2_ax.set_ydata([tpoint.ax for tpoint in self.trajectory_p2])
+        self.trajectory_p1_ax.set_xdata([tpoint.s for tpoint in self.trajectory])
+        self.trajectory_p1_ax.set_ydata([tpoint.ax for tpoint in self.trajectory])
 
-        self.trajectory_p1_yaw.set_xdata([tpoint.s for tpoint in self.trajectory_p1])
-        self.trajectory_p1_yaw.set_ydata([tpoint.yaw for tpoint in self.trajectory_p1])
-        self.trajectory_p2_yaw.set_xdata([tpoint.s + self.trajectory_p1[-1].s for tpoint in self.trajectory_p2])
-        self.trajectory_p2_yaw.set_ydata([tpoint.yaw for tpoint in self.trajectory_p2])
+        self.trajectory_p1_yaw.set_xdata([tpoint.s for tpoint in self.trajectory])
+        self.trajectory_p1_yaw.set_ydata([tpoint.yaw for tpoint in self.trajectory])
 
-        self.trajectory_p1_curv.set_xdata([tpoint.s for tpoint in self.trajectory_p1])
-        self.trajectory_p1_curv.set_ydata([tpoint.curvature for tpoint in self.trajectory_p1])
-        self.trajectory_p2_curv.set_xdata([tpoint.s + self.trajectory_p1[-1].s for tpoint in self.trajectory_p2])
-        self.trajectory_p2_curv.set_ydata([tpoint.curvature for tpoint in self.trajectory_p2])
+        self.trajectory_p1_curv.set_xdata([tpoint.s for tpoint in self.trajectory])
+        self.trajectory_p1_curv.set_ydata([tpoint.curvature for tpoint in self.trajectory])
 
     def full_update_data_graph_fig23(self):
         #Update data (with the new _and_ the old points)
@@ -298,8 +268,10 @@ class AutocoupAnimation():
             self.graph_axis[i].relim()
             self.graph_axis[i].autoscale_view()
 
+
         self.graph_figure.canvas.draw()
         self.graph_figure.canvas.flush_events()
+        self.graph_figure.savefig('velocityprofile', dpi=300)
 
         for i in range(4):
             self.graph_axis23[i].relim()

@@ -10,11 +10,11 @@ class Simulation:
         
         self.planner = CouplingPlanner( path_res=0.1, 
                                         path23_res=0.17, 
-                                        vx=-0.55, 
-                                        acc_time=0.5,
-                                        dec_time=0.5, 
+                                        vx=2.0, 
+                                        acc_time=3.0,
+                                        dec_time=3.0, 
                                         history_point_limit=3, 
-                                        trajectory_backup=1,
+                                        trajectory_backup=0,
                                         ego_delta_bilevel=0.3, 
                                         goal_delta_bilevel=0.15, 
                                         max_curvature=0.3, 
@@ -28,7 +28,6 @@ class Simulation:
     def simulate(self):
     
         counter = 0
-        self.planner.planner_mode = PlannerMode.SIMULATION
 
         while True:
 
@@ -36,14 +35,14 @@ class Simulation:
             counter += 1
             self.data_transfer()
             self.full_draw()
-            self.planner.cycle()
+            self.planner.prekingpin()
             #time.sleep(0.2)
 
     def data_transfer(self):
-        self.animation.data_transfer(   self.planner.trajectory_p1,self.planner.trajectory_p2,self.planner.trajectory23,\
+        self.animation.data_transfer(   self.planner.trajectory,self.planner.trajectory23,\
                                         self.planner.ego_pose.x,self.planner.ego_pose.y,self.planner.ego_pose.yaw,\
-                                        self.planner.kingpin_pose.x,self.planner.kingpin_pose.y,self.planner.kingpin_pose.yaw,\
-                                        self.planner.prekingpin_pose.x,self.planner.prekingpin_pose.y,self.planner.prekingpin_pose.yaw)
+                                        self.planner.kingpin_goal_pose.x,self.planner.kingpin_goal_pose.y,self.planner.kingpin_goal_pose.yaw,\
+                                        self.planner.prekingpin_goal_pose.x,self.planner.prekingpin_goal_pose.y,self.planner.prekingpin_goal_pose.yaw)
 
     def full_draw(self):
         self.animation.full_draw()

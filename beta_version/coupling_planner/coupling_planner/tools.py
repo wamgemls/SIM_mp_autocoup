@@ -64,11 +64,11 @@ class CouplingPlanner:
         self.dis_prekingpin_kingpin = dis_prekingpin_kingpin
 
         #Simulation Pose
-        self.kingpin_goal_pose = Pose(7.887, 5.3, np.deg2rad(45),0.0, 0.0)
+        self.kingpin_goal_pose = Pose(15.5, 20.2, np.deg2rad(90),0.0, 0.0)
         self.prekingpin_goal_pose = self.calc_prekingpin_pose(self.kingpin_goal_pose)
 
-        self.goal_pose = self.kingpin_goal_pose
-        self.ego_pose = Pose(10.246, 22.34, np.deg2rad(180),0.0, 0.0)
+        self.goal_pose = Pose()
+        self.ego_pose = Pose(5.8, 4.5, np.deg2rad(225),0.0, 0.0)
 
         self.planner_mode = None
         
@@ -95,6 +95,8 @@ class CouplingPlanner:
             self.prekingpin()
         elif self.planner_mode is PlannerMode.COUPLING_PHASE_KINGPIN:
             self.kingpin()
+        else:
+            self.standstill()
 
     def standstill(self):
         self.resample_trajectory23_standstill()
@@ -121,7 +123,8 @@ class CouplingPlanner:
 
     def ego_drive_step(self,trajectory):
 
-        _, self.ego_on_traj = self.give_closestprojection_on_trajectory(trajectory)
+        closest_trajectory_point = self.give_closestprojection_on_trajectory(trajectory)
+        self.ego_on_traj = closest_trajectory_point.s
         self.ego_on_traj += self.drive_step
 
         i = 1
@@ -134,17 +137,17 @@ class CouplingPlanner:
 
                 self.ego_pose.x = x + np.random.normal(0,0.05)
                 self.ego_pose.y = y + np.random.normal(0,0.05)
-                self.ego_pose.yaw = yaw + np.random.normal(0,0.1)
+                self.ego_pose.yaw = yaw + np.random.normal(0,0.01)
                 
-                break       
+                break
             i += 1
 
     def bilevel_check(self):
 
         dis_goal_trajgoal, theta_goal_trajgoal = self.calc_distance_angle_PoseA_PoseB(self.trajectory[-1],self.goal_pose)
 
-        point_on_trajectory,_ = self.give_closestprojection_on_trajectory(self.trajectory)
-        dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(point_on_trajectory,self.ego_pose)
+        closest_trajectory_point = self.give_closestprojection_on_trajectory(self.trajectory)
+        dis_ego_traj,theta_ego_traj = self.calc_distance_angle_PoseA_PoseB(closest_trajectory_point,self.ego_pose)
 
         if dis_goal_trajgoal > self.goal_delta_bilevel or dis_ego_traj > self.ego_delta_bilevel:
             self.sample_g2straight_trajectory(self.ego_pose,self.goal_pose)
@@ -179,10 +182,11 @@ class CouplingPlanner:
                                                                 vx=goal_pose.vx,
                                                                 curvature=goal_pose.curvature),
                                                                 self.trajectory_backup)
-            self.offset_yaw(trajectory)
-            self.offset_curvature(trajectory)
+            self.offset_yaw_backward(trajectory)
+            self.offset_curvature_backward(trajectory)
         else:
             trajectory = self.sample_g2straight_path(start_pose,goal_pose,self.trajectory_backup)
+            self.offset_yaw_forward(trajectory)
         
         self.calc_trajectory(trajectory)
         self.trajectory = trajectory
@@ -194,10 +198,11 @@ class CouplingPlanner:
 
         if self.vx < 0.0:
             trajectory = self.sample_straight(start_pose.x,start_pose.y,goal_pose.x,goal_pose.y)
-            self.offset_yaw(trajectory)
-            self.offset_curvature(trajectory)
+            self.offset_yaw_backward(trajectory)
+            self.offset_curvature_backward(trajectory)
         else:
             trajectory = self.sample_straight(start_pose.x,start_pose.y,goal_pose.x,goal_pose.y)
+            self.offset_yaw_forward(trajectory)
         
         self.calc_trajectory(trajectory)
         self.trajectory = trajectory
@@ -215,7 +220,8 @@ class CouplingPlanner:
         for point in path_1:
             point.s += path_0[-1].s
 
-        path_1.pop(0)
+        if path_1:
+            path_1.pop(0)
 
         return path_0 + path_1
 
@@ -234,8 +240,11 @@ class CouplingPlanner:
         for point in path_2:
             point.s += (g2clothoid_list[0].length + g2clothoid_list[1].length)
 
-        path_1.pop(0)
-        path_2.pop(0)
+        if path_1:
+            path_1.pop(0)
+
+        if path_2:
+            path_2.pop(0)
 
         return path_0 + path_1 + path_2
 
@@ -258,8 +267,8 @@ class CouplingPlanner:
 
     def sample_straight(self,x_start,y_start,x_end,y_end):
 
-        dx = x_start - x_end
-        dy = y_start - y_end
+        dx = x_end - x_start
+        dy = y_end - y_start
         length = np.hypot(dy, dx)
         theta = np.arctan2(dy, dx)
 
@@ -271,9 +280,9 @@ class CouplingPlanner:
         for sample_point in sample_points:
             path.insert(0,TrajectoryPoint(  
                 s = round(length-sample_point,4),
-                x = round(x_end + (sample_point*np.cos(theta)),4),
-                y = round(y_end + (sample_point*np.sin(theta)),4),
-                yaw = round(self.angle_interval(theta+np.pi),4),
+                x = round(x_end - (sample_point*np.cos(theta)),4),
+                y = round(y_end - (sample_point*np.sin(theta)),4),
+                yaw = round(theta,4),
                 curvature = round(0.0,4)))
 
         return path
@@ -284,7 +293,8 @@ class CouplingPlanner:
         self.trajectory23.clear()
 
         #calculate length startpoint on main trajectory
-        _,zero_len_on_traj = self.give_closestprojection_on_trajectory(traj)
+        closest_trajectory_point = self.give_closestprojection_on_trajectory(traj)
+        zero_len_on_traj = closest_trajectory_point.s 
 
         #calculate time startpint on main trajectory
         j = 1
@@ -336,6 +346,7 @@ class CouplingPlanner:
         t_23 = np.interp(s_23,s_raw,t_raw,-np.inf,np.inf)
         x_23 = np.interp(s_23,s_raw,x_raw)
         y_23 = np.interp(s_23,s_raw,y_raw)
+        #yaw_23 = np.interp(s_23,s_raw,yaw_raw)
         yaw_23 = self.angle_interp(s_23,s_raw,yaw_raw)
         vx_23 = np.interp(s_23,s_raw,vx_raw,0.,0.)
         ax_23 = np.interp(s_23,s_raw,ax_raw,0.,0.)
@@ -366,13 +377,18 @@ class CouplingPlanner:
             stillstand_trajectory.append(trajectory_point)
         
         self.trajectory23 = stillstand_trajectory
-        
-    def offset_yaw(self,trajectory):
+
+    def offset_yaw_forward(self,trajectory):
+
+        for trajectory_point in trajectory:
+            trajectory_point.yaw = self.angle_interval(trajectory_point.yaw)
+
+    def offset_yaw_backward(self,trajectory):
 
         for trajectory_point in trajectory:
             trajectory_point.yaw = self.angle_interval(trajectory_point.yaw-np.pi)
 
-    def offset_curvature(self,trajectory):
+    def offset_curvature_backward(self,trajectory):
 
         for trajectory_point in trajectory:
             trajectory_point.curvature = -trajectory_point.curvature
@@ -451,10 +467,10 @@ class CouplingPlanner:
                 trajectory[i].vx = round(self.func_dec(trajectory[i].t-dt1-dt2),4)
                 i += 1
 
-        if self.vx < 0.0:
-            trajectory[0].vx -= 0.001
-        else: 
-            trajectory[0].vx += 0.001 
+        #if self.vx < 0.0:
+        #    trajectory[0].vx -= 0.001
+        #else: 
+        #    trajectory[0].vx += 0.001 
 
         #calculate acceleration values based on velocity derivation
         i=1
@@ -472,7 +488,7 @@ class CouplingPlanner:
                 trajectory[i].ax = round(derivative(self.func_dec,trajectory[i-1].t,trajectory[i].t-trajectory[i-1].t),4)
                 i += 1
         trajectory[0].ax = trajectory[1].ax
-        trajectory[-1].ax = 0.0
+        #trajectory[-1].ax = 0.0
 
     def give_closestprojection_on_trajectory(self,trajectory):
 
@@ -480,10 +496,10 @@ class CouplingPlanner:
 
         for trajpoint in trajectory:
 
-            if self.calc_distance_angle_PoseA_PoseB(trajpoint,self.ego_pose) < self.calc_distance_angle_PoseA_PoseB(closest_trajpoint,self.ego_pose):
+            if self.calc_distance_angle_PoseA_PoseB(trajpoint,self.ego_pose)[0] < self.calc_distance_angle_PoseA_PoseB(closest_trajpoint,self.ego_pose)[0]:
                 closest_trajpoint = trajpoint
 
-        return closest_trajpoint, closest_trajpoint.s
+        return closest_trajpoint
 
     def give_latprojection_on_trajectory(self,trajectory):
 
@@ -507,7 +523,7 @@ class CouplingPlanner:
             if ((trajectory[i-1].x <= x <= trajectory[i].x or trajectory[i-1].x >= x >= trajectory[i].x) and 
                 (trajectory[i-1].y >= y >= trajectory[i].y or trajectory[i-1].y <= y <= trajectory[i].y)):
 
-                return trajectory[i-1], trajectory[i-1].s
+                return trajectory[i-1]
 
             i += 1
 
