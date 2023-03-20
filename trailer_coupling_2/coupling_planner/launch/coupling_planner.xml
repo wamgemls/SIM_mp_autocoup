@@ -1,0 +1,27 @@
+<launch>
+    
+    <node   name="pln_coupling_planner" 
+            pkg="coupling_planner" 
+            exec="coupling_planner" 
+            output="screen">
+            
+      <param name="timer_period_seconds" value="0.2"/>
+      <param name="planner_frame" value="truck_odom"/>
+      <param name="path_res" value="0.1"/>
+      <param name="path23_res" value="0.25"/>
+      <param name="vx" value="-0.5"/>
+      <param name="acc_time" value="0.5"/>
+      <param name="dec_time" value="0.5"/>
+      <param name="history_point_limit" value="3"/>
+      <param name="trajectory_backup" value="1"/>
+      <param name="ego_delta_bilevel" value="1.0"/>
+      <param name="goal_delta_bilevel" value="1.0"/>
+      <param name="max_curvature" value="0.5"/>
+      <param name="min_traj_length" value="2.0"/>
+      <param name="max_traj_length" value="50.0"/>
+      <param name="dis_prekingpin_kingpin" value="0.0"/>
+
+      <remap from="/ego_input" to="/loc/lelo/truck"/>
+    </node>
+
+</launch>

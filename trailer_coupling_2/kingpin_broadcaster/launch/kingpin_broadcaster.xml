@@ -1,0 +1,12 @@
+<launch>
+    
+    <node name="pln_kingpin_broadcaster" 
+          pkg="kingpin_broadcaster" 
+          exec="kingpin_broadcaster" 
+          output="screen">
+
+      <param name="timer_period_seconds" value="0.1"/>
+      <param name="noise_kingpin_pose" value="False"/>
+    </node>
+
+</launch>

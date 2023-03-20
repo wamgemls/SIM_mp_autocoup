@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>coupling_scope</name>
+  <version>0.0.0</version>
+  <description>coupling_gui</description>
+  <maintainer email="max-leon.sperling@man.eu">sperling</maintainer>
+  <license>MAN TRUCK AND BUS SE</license>
+
+  <depend>pln_interfaces</depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

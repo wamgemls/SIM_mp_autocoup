@@ -1,0 +1,14 @@
+<launch>
+    
+    <node name="pln_kingpin_broadcaster" 
+          pkg="coupling_scope" 
+          exec="coupling_scope" 
+          output="screen">
+
+      <param name="timer_period_seconds" value="0.2"/>
+      <param name="csv_save" value="False"/>
+      <param name="csv_path" value="/workspace/src/trailer_coupling/"/>
+      <param name="csv_filename" value="12_00_bla"/>
+    </node>
+
+</launch>
